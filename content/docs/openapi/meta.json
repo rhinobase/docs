@@ -1,0 +1,19 @@
+{
+    "root": true,
+    "title": "hono-openapi",
+    "icon": "Braces",
+    "pages": [
+        "---Introduction---",
+        "index",
+        "---Usage---",
+        "arktype",
+        "effect",
+        "valibot",
+        "zod",
+        "---Advance Usage---",
+        "ui",
+        "security",
+        "hide",
+        "persisting"
+    ]
+}

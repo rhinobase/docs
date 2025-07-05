@@ -1,28 +1,30 @@
-import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
+import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
+import { FaBluesky, FaXTwitter } from "react-icons/fa6";
+import Logo from "@/components/Logo";
 
-/**
- * Shared layout configurations
- *
- * you can customise layouts individually from:
- * Home Layout: app/(home)/layout.tsx
- * Docs Layout: app/docs/layout.tsx
- */
 export const baseOptions: BaseLayoutProps = {
   nav: {
-    title: (
-      <>
-        <svg
-          width="24"
-          height="24"
-          xmlns="http://www.w3.org/2000/svg"
-          aria-label="Logo"
-        >
-          <circle cx={12} cy={12} r={12} fill="currentColor" />
-        </svg>
-        My App
-      </>
-    ),
+    title: <Logo />,
   },
-  // see https://fumadocs.dev/docs/ui/navigation/links
-  links: [],
+  links: [
+    {
+      type: "icon",
+      icon: <FaXTwitter />,
+      text: "X",
+      url: "https://x.com/MathurAditya7",
+    },
+    {
+      type: "icon",
+      icon: <FaBluesky />,
+      text: "BlueSky",
+      url: "https://bsky.app/profile/maditya.sh",
+    },
+    // {
+    //   type: "icon",
+    //   icon: <FaDiscord />,
+    //   text: "Discord",
+    //   url: "https://discord.gg/3fWqvErPP5",
+    // },
+  ],
+  githubUrl: "https://github.com/hono-hub",
 };

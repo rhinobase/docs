@@ -1,13 +1,19 @@
-import { source } from '@/lib/source';
+import path from "node:path";
+import Link from "fumadocs-core/link";
 import {
-  DocsPage,
   DocsBody,
   DocsDescription,
+  DocsPage,
   DocsTitle,
-} from 'fumadocs-ui/page';
-import { notFound } from 'next/navigation';
-import { createRelativeLink } from 'fumadocs-ui/mdx';
-import { getMDXComponents } from '@/mdx-components';
+} from "fumadocs-ui/page";
+import { notFound } from "next/navigation";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import { source } from "@/lib/source";
+import { getMDXComponents } from "@/mdx-components";
 
 export default async function Page(props: {
   params: Promise<{ slug?: string[] }>;
@@ -25,8 +31,34 @@ export default async function Page(props: {
       <DocsBody>
         <MDXContent
           components={getMDXComponents({
-            // this allows you to link to other pages with relative file paths
-            a: createRelativeLink(source, page),
+            a: ({ href, ...props }) => {
+              const found = source.getPageByHref(href ?? "", {
+                dir: path.dirname(page.path),
+              });
+
+              if (!found) return <Link href={href} {...props} />;
+
+              return (
+                <HoverCard>
+                  <HoverCardTrigger asChild>
+                    <Link
+                      href={
+                        found.hash
+                          ? `${found.page.url}#${found.hash}`
+                          : found.page.url
+                      }
+                      {...props}
+                    />
+                  </HoverCardTrigger>
+                  <HoverCardContent className="text-sm">
+                    <p className="font-medium">{found.page.data.title}</p>
+                    <p className="text-fd-muted-foreground">
+                      {found.page.data.description}
+                    </p>
+                  </HoverCardContent>
+                </HoverCard>
+              );
+            },
           })}
         />
       </DocsBody>

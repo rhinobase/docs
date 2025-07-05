@@ -1,0 +1,36 @@
+---
+title: Security Definitions
+description: Add security definitions to your OpenAPI specification
+---
+
+You can add security definitions to your OpenAPI specification by using the `security` property in the `openAPIRouteHandler` function.
+
+```ts
+main.get(
+  "/openapi.json",
+  openAPIRouteHandler(app, {
+    documentation: {
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: "http",
+            scheme: "bearer",
+            bearerFormat: "JWT",
+          },
+        },
+      },
+      security: [
+        {
+          bearerAuth: [],
+        },
+      ],
+      servers: [
+        {
+          url: "http://localhost:3000",
+          description: "Local server",
+        },
+      ],
+    },
+  })
+);
+```

@@ -1,0 +1,65 @@
+---
+title: Saving Spec
+description: Save the spec to a file for cache or any other external use
+---
+
+The `openAPIRouteHandler` function creates the OpenAPI specification and store it in a global variable, which can work as cache in a stateful environment like a Node.js server. However, this will not work in serverless environments where the app is restarted frequently. In such cases, you can generate the OpenAPI spec and save it to a file, this way you can serve the spec from the file instead of generating it on each request. And based upon your provider, you can also cache this.
+
+<Callout>
+_openAPIRouteHandler_ only computes the OpenAPI spec when the route is accessed. It does not compute the spec on app initialization.
+</Callout>
+
+## JSON
+
+This simple script will generate the OpenAPI spec and save it to a JSON file. You can run this script whenever you make changes to your routes or when you want to update the OpenAPI spec.
+
+```ts
+import fs from 'node:fs';
+import { generateSpecs } from 'hono-openapi';
+
+// Your Hono app
+import mainApp from "./app";
+
+async function main() {
+    const specs = await generateSpecs(mainApp, {
+        // Documentation metadata
+    });
+
+    fs.writeFileSync('./path/to/openapi.json', JSON.stringify(specs, null, 2));
+}
+
+main()
+```
+
+<Callout title="Note">
+This script might not work if you are hiding routes conditionally, as the `generateSpecs` function will require the context of the request to determine which routes to include in the spec. You might wanna use a different approach to generate the spec in such cases.
+</Callout>
+
+## YAML
+
+To save the OpenAPI spec in YAML format, you can use the `js-yaml` package. First, install the package:
+
+```package-install
+js-yaml
+```
+
+Then, you can modify the script to save the spec in YAML format:
+
+```ts
+import fs from 'node:fs';
+import { generateSpecs } from 'hono-openapi';
+import yaml from 'js-yaml';
+
+// Your Hono app
+import mainApp from "./app";
+
+async function main() {
+    const specs = await generateSpecs(mainApp, {
+        // Documentation metadata
+    });
+
+    fs.writeFileSync('./path/to/openapi.yaml', yaml.dump(specs));
+}
+
+main()
+```

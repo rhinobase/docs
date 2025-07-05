@@ -1,0 +1,53 @@
+---
+title: OpenAPI Documentation
+description: Generating OpenAPI specifications based docs
+---
+
+Once you get your OpenAPI spec, you can use it to generate documentation for your API. This is super useful when working with teams or when you want to provide a easy way for others to understand your API.
+
+## Scalar
+
+To use Scalar, you need to install the `@scalar/hono-api-reference` package.
+
+```package-install
+@scalar/hono-api-reference
+```
+
+Assuming you are serving your OpenAPI spec at `/openapi.json`, you can use Scalar to generate the documentation like this
+
+```ts
+import { Scalar } from "@scalar/hono-api-reference";
+
+app.get(
+  "/docs",
+  Scalar({
+    theme: "saturn",
+    url: "/openapi.json",
+  })
+);
+```
+
+Navigating to `/docs` will now show you the documentation for your API. Scalar provides a beautiful and interactive way to explore your API, making it easy for developers to understand how to use it. You can learn more about this at [Scalar's documentation](https://guides.scalar.com/scalar/scalar-api-references/integrations/hono).
+
+## Swagger UI
+
+To use Swagger UI, you need to install the `@hono/swagger-ui` package.
+
+```package-install
+@hono/swagger-ui
+```
+
+Assuming you are serving your OpenAPI spec at `/openapi.json`, you can use Swagger UI to generate the documentation like this
+
+```ts
+import { swaggerUI } from '@hono/swagger-ui'
+
+app.get(
+  '/docs',
+  swaggerUI({
+    url: '/openapi.json',
+  })
+)
+```
+
+Navigating to `/docs` will now show you the documentation for your API. You can learn more about this at [@hono/swagger-ui's documentation](https://github.com/honojs/middleware/tree/main/packages/swagger-ui).
