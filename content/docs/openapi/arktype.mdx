@@ -79,6 +79,9 @@ And that's it! You have successfully integrated Hono OpenAPI. Now you will have 
 
 You can also pass json schema directly to the `responses.200.content["application/json"].schema` if you don't want to use `resolver` from `hono-openapi`. This is useful if you have a static schema that you want to use for the response body.
 
+## Passing Reference
+
+TODO
 
 ## Adding typesense for response body
 
@@ -114,3 +117,5 @@ main.get(
 ```
 
 Navigate to `/openapi.json` to see the generated OpenAPI spec. You can also use tools like [Scalar](https://scalar.com/) or Swagger UI to visualize the OpenAPI spec. Check out the [OpenAPI documentation](/docs/openapi/ui) for more details on how to use these tools.
+
+For quick testing, you can also pass `includeEmptyPaths: true` to the `openAPIRouteHandler` options. This will include all the routes in the hono app, even if they don't have any OpenAPI documentation. This is useful for debugging and testing purposes.

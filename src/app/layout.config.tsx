@@ -11,13 +11,13 @@ export const baseOptions: BaseLayoutProps = {
       type: "icon",
       icon: <FaXTwitter />,
       text: "X",
-      url: "https://x.com/MathurAditya7",
+      url: "https://x.com/hono_hub",
     },
     {
       type: "icon",
       icon: <FaBluesky />,
       text: "BlueSky",
-      url: "https://bsky.app/profile/maditya.sh",
+      url: "https://bsky.app/profile/honohub.dev",
     },
     // {
     //   type: "icon",

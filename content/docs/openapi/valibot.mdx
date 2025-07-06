@@ -3,4 +3,119 @@ title: Valibot
 description: Using hono-openapi with Valibot
 ---
 
-Hello
+## Define Validation Schemas
+
+First, you need to define your validation schemas using Valibot. Below is an example of how to define schemas for query parameters and response body.
+
+```ts
+import * as v from "valibot";
+
+// Validation for query parameters, eg - `/hello?name=John`
+const querySchema = v.object({
+    name: v.optional(v.string()),
+});
+
+// Validation for response body, eg - `"Hello, John!"`
+const responseSchema = v.string();
+```
+
+These schemas will be used to generate the OpenAPI specifications for your Incoming requests and Outgoing responses.
+
+## Updating the Router
+
+Code below shows how you might be using Valibot with Hono for validation.
+
+```ts
+import { Hono } from "hono";
+import { vValidator } from "@hono/valibot-validator";
+
+const app = new Hono();
+
+app.get("/", vValidator("query", querySchema), (c) => {
+  const query = c.req.valid("query");
+  return c.text(`Hello ${query?.name ?? "Hono"}!`);
+});
+```
+
+Now, follow the steps below to integrate Hono OpenAPI -
+
+1. Inplace of importing the validation middleware (`vValidator`), from `@hono/valibot-validator`, import it from `hono-openapi`.
+2. For describing the response body or adding information about the route, import `describeRoute` from `hono-openapi`. If you will be defining the response body using Valibot, you will also need to import `resolver` from `hono-openapi`.
+3. You can uninstall `@hono/valibot-validator` as it is no longer needed.
+
+```ts
+import { Hono } from "hono";
+import {
+  validate as vValidator,
+  resolver,
+  describeRoute,
+} from "hono-openapi";
+
+const app = new Hono();
+
+app.get(
+  "/",
+  describeRoute({
+    responses: {
+      200: {
+        description: "Successful response",
+        content: {
+          "application/json": {
+            schema: resolver(responseSchema),
+          },
+        },
+      },
+    },
+  }),
+  vValidator("query", querySchema),
+  (c) => {
+    const query = c.req.valid("query");
+    return c.text(`Hello ${query?.name ?? "Hono"}!`);
+  },
+);
+```
+
+And that's it! You have successfully integrated Hono OpenAPI. Now you will have to do this for all the routes you want to document but there is a way to list all the routes, which we will cover in the [Generating the OpenAPI Spec](#generating-the-openapi-spec) section.
+
+You can also pass json schema directly to the `responses.200.content["application/json"].schema` if you don't want to use `resolver` from `hono-openapi`. This is useful if you have a static schema that you want to use for the response body.
+
+## Passing Reference
+
+TODO
+
+## Adding typesense for response body
+
+TODO
+
+## Generating the OpenAPI Spec
+
+For serving the OpenAPI spec, you can use the `openAPIRouteHandler` from `hono-openapi`. This will automatically generate the OpenAPI spec based on the routes you have defined in your Hono app.
+
+In the example below, we will be serving the OpenAPI spec at `/openapi.json`.
+
+```ts
+import { Hono } from "hono";
+import { openAPIRouteHandler } from "hono-openapi";
+
+// Other hono apps
+import routes from "./routes";
+
+const main = new Hono();
+
+main.get(
+  "/openapi.json",
+  openAPIRouteHandler(routes, {
+    documentation: {
+      info: {
+        title: "Hono",
+        version: "1.0.0",
+        description: "API for greeting users",
+      },
+    },
+  }),
+);
+```
+
+Navigate to `/openapi.json` to see the generated OpenAPI spec. You can also use tools like [Scalar](https://scalar.com/) or Swagger UI to visualize the OpenAPI spec. Check out the [OpenAPI documentation](/docs/openapi/ui) for more details on how to use these tools.
+
+For quick testing, you can also pass `includeEmptyPaths: true` to the `openAPIRouteHandler` options. This will include all the routes in the hono app, even if they don't have any OpenAPI documentation. This is useful for debugging and testing purposes.
