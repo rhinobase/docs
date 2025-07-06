@@ -1,5 +1,5 @@
 import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
-import { FaBluesky, FaXTwitter } from "react-icons/fa6";
+import { FaBluesky, FaDiscord, FaXTwitter } from "react-icons/fa6";
 import Logo from "@/components/Logo";
 
 export const baseOptions: BaseLayoutProps = {
@@ -11,20 +11,20 @@ export const baseOptions: BaseLayoutProps = {
       type: "icon",
       icon: <FaXTwitter />,
       text: "X",
-      url: "https://x.com/hono_hub",
+      url: "https://x.com/rhinobaseio",
     },
     {
       type: "icon",
       icon: <FaBluesky />,
       text: "BlueSky",
-      url: "https://bsky.app/profile/honohub.dev",
+      url: "https://bsky.app/profile/maditya.sh",
     },
-    // {
-    //   type: "icon",
-    //   icon: <FaDiscord />,
-    //   text: "Discord",
-    //   url: "https://discord.gg/3fWqvErPP5",
-    // },
+    {
+      type: "icon",
+      icon: <FaDiscord />,
+      text: "Discord",
+      url: "https://discord.gg/4rNs6ywvtV",
+    },
   ],
   githubUrl: "https://github.com/hono-hub",
 };

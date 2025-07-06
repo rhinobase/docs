@@ -21,13 +21,7 @@ export function generateMetadata(): Metadata {
   return {
     title,
     description,
-    keywords: [
-      "Honojs",
-      "toolkit",
-      "javascript",
-      "typescript",
-      "hono",
-    ],
+    keywords: ["Honojs", "toolkit", "javascript", "typescript", "hono"],
     metadataBase: new URL("https://honohub.dev"),
     category: "education",
     twitter: {

@@ -6,7 +6,9 @@ export default function HomePage() {
     <main className="flex flex-1 flex-col justify-center items-center text-center">
       <Logo />
       <h2 className="m-2 text-lg font-semibold">
-        The MCP Development Platform
+        {"\/\/"}{" "}
+        <span className="bg-amber-300 dark:bg-amber-500 p-0.5">TODO:</span> Add
+        a description of the project
       </h2>
       <p className="text-fd-muted-foreground">
         You can open{" "}
