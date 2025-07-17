@@ -83,7 +83,37 @@ You can also pass json schema directly to the `responses.200.content["applicatio
 
 ## Passing Reference
 
-TODO
+For zod v4, you can use [Registry](https://zod.dev/json-schema?id=metadata). Here is a demo -
+
+```ts
+const schema = z
+  .object({
+    myString: z.string(),
+    myUnion: z.union([z.number(), z.boolean()]),
+  })
+  .describe("My neat object schema").meta({
+    ref: "MyNeatObjectSchema",
+  });
+```
+
+For zod v3, you can use the `zod-openapi` library. Here is a demo -
+
+```ts
+import "zod-openapi/extend";
+
+const schema = z
+  .object({
+    myString: z.string(),
+    myUnion: z.union([z.number(), z.boolean()]),
+  })
+  .describe("My neat object schema").openapi({
+    ref: "MyNeatObjectSchema",
+  });
+```
+
+<Callout title="Note">
+You need to install `zod-openapi@4` for this to work properly.
+</Callout>
 
 ## Adding typesense for response body
 

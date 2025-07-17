@@ -81,7 +81,32 @@ You can also pass json schema directly to the `responses.200.content["applicatio
 
 ## Passing Reference
 
-TODO
+For adding references to your Arktype schemas, you first need to add configurations which you can define globally like this -
+
+```ts
+// add this anywhere in your project
+declare global {
+  interface ArkEnv {
+    meta(): {
+      // meta properties should always be optional
+      ref?: string;
+    };
+  }
+}
+```
+
+And now you can add references to your Arktype schemas like this -
+
+```ts
+const schema = type({
+  myString: "string",
+  myUnion: "number | boolean",
+})
+  .describe("My neat object schema")
+  .configure({
+    ref: "MyNeatObjectSchema",
+  });
+```
 
 ## Adding typesense for response body
 
