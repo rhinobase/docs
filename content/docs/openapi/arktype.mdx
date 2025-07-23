@@ -110,7 +110,44 @@ const schema = type({
 
 ## Adding typesense for response body
 
-TODO
+Simply just create your response schema and pass it in the `describeResponse` function. This will automatically provide typesense for the response body.
+
+```ts
+const successResponseSchema = type({
+  message: "string",
+});
+
+const errorResponseSchema = type({
+  error: "string",
+});
+
+app.get(
+  "/",
+  describeResponse(
+    (c) => {
+      return c.json({ message: "Hello Hono!" }, 200);
+    },
+    {
+      200: {
+        description: "Success",
+        content: {
+          "application/json": {
+            vSchema: successResponseSchema,
+          },
+        },
+      },
+      400: {
+        description: "Error",
+        content: {
+          "application/json": {
+            vSchema: errorResponseSchema,
+          },
+        },
+      },
+    },
+  ),
+);
+```
 
 ## Generating the OpenAPI Spec
 

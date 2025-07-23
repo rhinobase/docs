@@ -117,7 +117,44 @@ You need to install `zod-openapi@4` for this to work properly.
 
 ## Adding typesense for response body
 
-TODO
+Simply just create your response schema and pass it in the `describeResponse` function. This will automatically provide typesense for the response body.
+
+```ts
+const successResponseSchema = z.object({
+  message: z.string(),
+});
+
+const errorResponseSchema = z.object({
+  error: z.string(),
+});
+
+app.get(
+  "/",
+  describeResponse(
+    (c) => {
+      return c.json({ message: "Hello Hono!" }, 200);
+    },
+    {
+      200: {
+        description: "Success",
+        content: {
+          "application/json": {
+            vSchema: successResponseSchema,
+          },
+        },
+      },
+      400: {
+        description: "Error",
+        content: {
+          "application/json": {
+            vSchema: errorResponseSchema,
+          },
+        },
+      },
+    },
+  ),
+);
+```
 
 ## Generating the OpenAPI Spec
 

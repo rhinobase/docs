@@ -55,7 +55,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     <html lang="en" className={inter.className} suppressHydrationWarning>
       <head>
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-        <GoogleAnalytics gaId="G-950MSN3L0J" />
+        <GoogleAnalytics gaId="G-S4SLS87GGQ" />
       </head>
       <body className="flex flex-col min-h-screen selection:bg-[#79ffe1] dark:selection:bg-[#f81ce5] dark:selection:text-white selection:text-secondary-700">
         <RootProvider>{children}</RootProvider>
