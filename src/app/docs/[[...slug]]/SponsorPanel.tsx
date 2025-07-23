@@ -1,3 +1,4 @@
+import { MoveRight } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/lib/cn";
 
@@ -6,7 +7,7 @@ type SponsorTier = "gold" | "silver" | "bronze";
 export type Sponsor = {
   name: string;
   url: string;
-  image: string;
+  image: string | React.ReactNode;
   tier: SponsorTier;
 };
 
@@ -30,16 +31,30 @@ export default async function SponsorPanel() {
   }
 
   return (
-    <div className="space-y-1 rounded-xl overflow-hidden">
+    <>
+      {sponsors.length > 0 && (
+        <div className="space-y-1 mt-5 rounded-xl overflow-hidden">
       {fullSizeSponsors.map((sponsor) => (
         <SponsorBlock key={sponsor.name} sponsor={sponsor} />
       ))}
+          {smallSizeSponsors.length > 0 && (
       <div className="grid grid-cols-2 gap-1">
         {smallSizeSponsors.map((sponsor, index) => (
           <SponsorBlock key={sponsor?.name ?? index} sponsor={sponsor} />
         ))}
       </div>
+          )}
     </div>
+      )}
+      <a
+        href="https://github.com/sponsors/rhinobase"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-center gap-2 mt-5 text-sm font-semibold text-secondary-700 hover:text-secondary-900 dark:text-secondary-300 dark:hover:text-secondary-100 transition-colors"
+      >
+        Become a sponsor <MoveRight className="inline" />
+      </a>
+    </>
   );
 }
 
@@ -51,6 +66,7 @@ function SponsorBlock(props: { sponsor?: Sponsor }) {
 
   return (
     <a
+      title={sponsor.name}
       href={sponsor.url}
       target="_blank"
       rel="noopener noreferrer"
@@ -59,20 +75,28 @@ function SponsorBlock(props: { sponsor?: Sponsor }) {
         sponsor.tier === "gold" ? "p-5" : "p-3",
       )}
     >
-      <Image
-        src={sponsor.image}
-        alt={sponsor.name}
+      <div
         className={cn(
-          "max-w-full object-contain grayscale group-hover:grayscale-0",
+          "max-w-full m-auto grayscale group-hover:grayscale-0",
           sponsor.tier === "gold"
-            ? "max-h-16"
+            ? "h-16"
             : sponsor.tier === "silver"
-              ? "max-h-12"
-              : "max-h-10",
+              ? "h-12"
+              : "h-10",
         )}
+      >
+        {typeof sponsor.image === "string" ? (
+          <Image
+            src={sponsor.image}
+            alt={sponsor.name}
+            className="object-contain"
         width={150}
         height={150}
       />
+        ) : (
+          sponsor.image
+        )}
+      </div>
     </a>
   );
 }
