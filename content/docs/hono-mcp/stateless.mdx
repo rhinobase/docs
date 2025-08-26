@@ -1,0 +1,32 @@
+---
+title: Stateless MCP
+description: Create a stateless MCP with @hono/mcp
+---
+
+When working with Stateless MCP Servers, you can just create a single instance of `StreamableHTTPTransport` and connect it to your MCP server, once. This allows you to handle all incoming requests without needing to redo the connection for each request.
+
+```ts
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StreamableHTTPTransport } from "@hono/mcp";
+import { Hono } from "hono";
+
+const app = new Hono();
+const mcpServer = new McpServer({
+	name: "my-mcp-server",
+	version: "1.0.0",
+});
+
+const transport = new StreamableHTTPTransport();
+
+let isConnected = false;
+const connectedToServer = mcpServer.connect(transport).then(() => {
+	isConnected = true;
+});
+
+app.all("/mcp", async (c) => {
+	if (!isConnected) await connectedToServer;
+	return transport.handleRequest(c);
+});
+
+export default app;
+```

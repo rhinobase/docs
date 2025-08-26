@@ -1,0 +1,63 @@
+---
+title: Quick Start
+description: Getting started with the @hono/mcp
+icon: Album
+---
+
+## Introduction
+
+[@hono/mcp](npmjs.com/package/@hono/mcp) is a library that makes it easy to serve a MCP Server on [Honojs](https://hono.dev/). This way you can host your MCP server on all the platforms that Hono supports, such as Cloudflare Workers, Deno, Vercel, and more from the same codebase.
+
+<YoutubePlayer videoid="KiBdEo1nS8A" />
+
+## Installation
+
+You can install the `@hono/mcp` package using your preferred package manager.
+
+<Tabs groupId='package-manager' persist items={['npm', 'pnpm', 'yarn', 'bun']} label='Install @hono/mcp'>
+
+```bash tab="npm"
+npm install @hono/mcp
+```
+
+```bash tab="pnpm"
+pnpm add @hono/mcp
+```
+
+```bash tab="yarn"
+yarn install @hono/mcp
+```
+
+```bash tab="bun"
+bun add @hono/mcp
+```
+
+</Tabs>
+
+## Usage
+
+In the below example, we create a simple Hono application that serves a MCP server. The MCP server can be accessed at the `/mcp` endpoint, and it uses the `StreamableHTTPTransport` to handle incoming requests.
+
+```ts
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { StreamableHTTPTransport } from '@hono/mcp'
+import { Hono } from 'hono'
+
+const app = new Hono()
+
+// Your MCP server implementation
+const mcpServer = new McpServer({
+  name: 'my-mcp-server',
+  version: '1.0.0',
+})
+
+app.all('/mcp', async (c) => {
+  const transport = new StreamableHTTPTransport()
+  await mcpServer.connect(transport)
+  return transport.handleRequest(c)
+})
+
+export default app
+```
+
+This transport is inspired by the [Official Model Context Protocol SDK](https://github.com/modelcontextprotocol/typescript-sdk), but it is built from the ground up to work with Hono and its streaming capabilities, making it possible to use it in environments like Cloudflare Workers or Deno.

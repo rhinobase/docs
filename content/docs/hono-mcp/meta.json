@@ -1,0 +1,13 @@
+{
+    "root": true,
+    "title": "@hono/mcp",
+    "icon": "Package",
+    "pages": [
+        "---Introduction---",
+        "index",
+        "---Tutorials---",
+        "stateless",
+        "stateful",
+        "auth"
+    ]
+}

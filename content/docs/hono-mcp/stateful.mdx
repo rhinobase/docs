@@ -1,0 +1,58 @@
+---
+title: Stateful MCP
+description: Create a stateful MCP with @hono/mcp
+---
+
+For stateful MCP servers, you wanna have some unique string that identifies the user or session. This allows you to maintain state across multiple requests from the same user. You can use the `sessionIdGenerator` option in the `StreamableHTTPTransport` to achieve this.
+
+In this example, we have a user context that is set in the middleware, and we use the user's ID as the session ID. This way, all requests from the same user will be handled by the same MCP server instance, allowing you to maintain state.
+
+```ts
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StreamableHTTPTransport } from "@hono/mcp";
+import { Hono } from "hono";
+
+type HonoEnv = {
+	Variables: {
+		user: {
+			id: string;
+		};
+	};
+};
+
+const app = new Hono<HonoEnv>().use(async (c, next) => {
+	// Simulate user context
+	c.set("user", { id: "random-user-id" });
+
+	await next();
+});
+
+function createMCPServer(id: string) {
+	const mcpServer = new McpServer({
+		name: "my-mcp-server",
+		version: "1.0.0",
+	});
+
+    // Here you can add any stateful logic, such as storing user-specific data
+
+	return mcpServer;
+}
+
+app.all("/mcp", async (c) => {
+	const user = c.get("user");
+	const transport = new StreamableHTTPTransport({
+		sessionIdGenerator: () => user.id,
+	});
+
+	const mcpServer = createMCPServer();
+	mcpServer.connect(transport);
+
+	return transport.handleRequest(c);
+});
+
+export default app;
+```
+
+## Why Stateful MCP?
+
+This can be benifitial in scenarios where you want to provide access to some tools/resources based on the user's permissions. For example, you can have a tool that only certain users can access, and you can use the user's ID to check if they have permission to use that tool. This way, you can maintain state across multiple requests and provide a more personalized experience for the user.
