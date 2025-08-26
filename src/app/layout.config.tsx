@@ -11,7 +11,7 @@ export const baseOptions: BaseLayoutProps = {
       type: "icon",
       icon: <FaXTwitter />,
       text: "X",
-      url: "https://x.com/rhinobaseio",
+      url: "https://x.com/MathurAditya7",
     },
     {
       type: "icon",
@@ -26,5 +26,5 @@ export const baseOptions: BaseLayoutProps = {
       url: "https://discord.gg/4rNs6ywvtV",
     },
   ],
-  githubUrl: "https://github.com/hono-hub",
+  githubUrl: "https://github.com/rhinobase",
 };
