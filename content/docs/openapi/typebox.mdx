@@ -1,0 +1,26 @@
+---
+title: TypeBox
+description: Using hono-openapi with TypeBox
+---
+
+## Define Validation Schemas
+
+First, you need to define your validation schemas using TypeBox. Below is an example of how to define schemas for query parameters and response body.
+
+```ts
+import { Type } from '@sinclair/typebox'
+
+// Validation for query parameters, eg - `/hello?name=John`
+const querySchema = Type.Partial(
+  Type.Object({
+    name: Type.String(),
+  }),
+);
+
+// Validation for response body, eg - `"Hello, John!"`
+const responseSchema = Type.String();
+```
+
+These schemas will be used to generate the OpenAPI specifications for your Incoming requests and Outgoing responses.
+
+Now out of the box, TypeBox doesn't support Standard Schema, so you will need to use [TypeMap](https://github.com/sinclairzx81/typemap) to convert the TypeBox schema to any of the supported validation schemas. Then you can follow the steps for the corresponding validation schema.
