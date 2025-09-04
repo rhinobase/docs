@@ -14,7 +14,8 @@
     "---Advance Usage---",
     "ui",
     "security",
-    "hide",
-    "persisting"
+    "helpers",
+    "persisting",
+    "migration"
   ]
 }

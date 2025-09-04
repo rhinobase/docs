@@ -1,0 +1,106 @@
+---
+title: Migration
+description: Guide to migrate from other libraries to hono-openapi
+---
+
+## Hono Zod OpenAPI
+
+If you are using [@hono/zod-openapi](https://npmjs.com/package/@hono/zod-openapi), you can migrate to `hono-openapi` by following the steps below.
+
+### 1. Install `hono-openapi` and `@hono/standard-validator`
+
+```package-install
+hono-openapi @hono/standard-validator
+```
+
+### 2. Inplace of import `zod` from `@hono/zod-openapi`, you can now directly import `zod`.
+
+```diff
+- import { z } from "@hono/zod-openapi";
++ import { z } from "zod";
+```
+
+If you are using `.openapi()` method from `@hono/zod-openapi`, you will need to change that. You can checkout the [Zod](/docs/openapi/zod#passing-reference) documentation for examples.
+
+### 3. Remove the `createRoute` function.
+
+This is how you would have written it -
+
+```ts
+const route = createRoute({
+  method: 'get',
+  path: '/users/{id}',
+  request: {
+    params: ParamsSchema,
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: UserSchema,
+        },
+      },
+      description: 'Retrieve the user',
+    },
+  },
+})
+```
+
+Now, you can simply use the `describeRoute` and `validator` middleware to describe the route.
+
+```ts
+import { Hono } from "hono";
+import { describeRoute, validator, resolver } from "hono-openapi";
+
+const app = new Hono();
+
+app.get(
+  '/users/{id}',
+  describeRoute({
+    responses: {
+      200: {
+        content: {
+          'application/json': {
+            schema: resolver(UserSchema),
+          },
+        },
+      },
+    },
+  }),
+  validator('params', ParamsSchema),
+  (c) => {
+      // ...
+  }
+);
+```
+
+Basically instead of creating a route object, and later defining the handler, `hono-openapi` allows you to describe the route and other information using middlewares.
+
+### 4. Generate the OpenAPI spec
+
+```ts
+import { Hono } from "hono";
+import { openAPIRouteHandler } from "hono-openapi";
+
+// Other hono apps
+import routes from "./routes";
+
+const main = new Hono();
+
+main.get(
+  "/openapi.json",
+  openAPIRouteHandler(routes, {
+    documentation: {
+      info: {
+        title: "Hono",
+        version: "1.0.0",
+        description: "API for greeting users",
+      },
+    },
+  }),
+);
+```
+
+### 5. Remove the `@hono/zod-openapi` and `@hono/zod-validator` package.
+
+Simply uninstall the packages.

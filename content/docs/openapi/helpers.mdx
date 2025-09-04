@@ -1,0 +1,60 @@
+---
+title: Helper Functions
+description: Helper functions for working with Hono OpenAPI
+---
+
+## Hide Routes
+
+You can conditionally hide routes from the OpenAPI specification by using the `hide` property in the `describeRoute` function. This is useful when you want to hide certain routes in production or based on some environment variable.
+
+```ts
+app.get(
+  "/",
+  describeRoute({
+    // ...
+    hide: process.env.NODE_ENV === "production",
+  }),
+  (c) => {
+    return c.text("Private Route");
+  }
+);
+```
+
+You can also pass a function to the `hide` property which will be called with the context object.
+
+```ts
+app.get(
+  "/",
+  describeRoute({
+    hide: ({ c, path, method }) => c.env.NODE_ENV === "production",
+  }),
+);
+```
+
+<Callout title="Note">
+The `c` object is the context object which you passed in `openAPIRouteHandler` or `generateSpecs` function. The `path` and `method` properties are the path and method of the current route. This is useful when you want to globally declare the function to hide routes.
+</Callout>
+
+## OperationId
+
+Out of the box, the `describeRoute` function will generate a unique operationId for each route. This is useful for generating the OpenAPI specification. However, in some cases, you might want to manually set the operationId for a route. You can do this by passing the `operationId` property to the `describeRoute` function.
+
+```ts
+app.get(
+  "/",
+  describeRoute({
+    operationId: "getHello",
+  }),
+);
+```
+
+You can also pass a function to the `operationId` property which will be called with the route object.
+
+```ts
+app.get(
+  "/",
+  describeRoute({
+    operationId: (route) => `${route.method}-${route.path}`,
+  }),
+);
+```
