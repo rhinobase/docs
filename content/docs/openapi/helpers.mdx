@@ -58,3 +58,23 @@ app.get(
   }),
 );
 ```
+
+## Vendor Loading
+
+In v1, we added support for `loadVendor` function, which you can use for -
+
+1. Loading other vendor libraries, which support Standard Schema
+2. Implement custom parsing/processing logic for supported vendors
+
+```ts
+import { loadVendor } from "hono-openapi";
+import zodOpenApiHandler from "@standard-community/standard-openapi/zod";
+
+loadVendor("zod", {
+  toOpenAPISchema: zodOpenApiHandler(),
+});
+```
+
+The vendor name used here comes from the Standard Schema library's vendor name, which you can find by `'schema["~standard"].vendor'` where `schema` is the Standard Schema library's schema object.
+
+As the `hono-openapi` uses `@standard-community/standard-openapi` and `@standard-community/standard-json` under the hood, they expose the currently used functions for transforming the schemas. You can use them and either create a wrapper function or create one from scratch.
