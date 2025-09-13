@@ -67,11 +67,17 @@ In v1, we added support for `loadVendor` function, which you can use for -
 2. Implement custom parsing/processing logic for supported vendors
 
 ```ts
-import { loadVendor } from "hono-openapi";
-import zodOpenApiHandler from "@standard-community/standard-openapi/zod";
+import { z } from "zod/v4";
+import { toJSONSchema } from "zod/v4/core";
+import { loadVendor } from "hono-openapi"
+import { convertToOpenAPISchema } from "@standard-community/standard-openapi/convert";
 
 loadVendor("zod", {
-  toOpenAPISchema: zodOpenApiHandler(),
+  toOpenAPISchema: (schema, context) => {
+    return convertToOpenAPISchema(toJSONSchema(schema, {
+      io: "input"
+    }), context);
+  },
 });
 ```
 
