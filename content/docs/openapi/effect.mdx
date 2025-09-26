@@ -83,7 +83,19 @@ You can also pass json schema directly to the `responses.200.content["applicatio
 
 ## Passing Reference
 
-TODO
+You can use the `annotations` function to pass the reference to the schema -
+
+```ts
+const schema = Schema.standardSchemaV1(
+  Schema.Struct({
+    myString: Schema.String,
+    myUnion: Schema.Union(Schema.Number, Schema.Boolean),
+  }).annotations({
+    description: "My neat object schema",
+    identifier: "MyNeatObjectSchema",
+  }),
+);
+```
 
 ## Adding typesense for response body
 
