@@ -1,26 +1,171 @@
 ---
-title: TypeBox
-description: Using hono-openapi with TypeBox
+title: Typebox
+description: Using hono-openapi with Typebox
 ---
 
 ## Define Validation Schemas
 
-First, you need to define your validation schemas using TypeBox. Below is an example of how to define schemas for query parameters and response body.
+First, you need to define your validation schemas using Typebox. Below is an example of how to define schemas for query parameters and response body.
 
 ```ts
-import { Type } from '@sinclair/typebox'
+import Type from "typebox";
+import { Compile } from "typebox/compile";
 
 // Validation for query parameters, eg - `/hello?name=John`
-const querySchema = Type.Partial(
-  Type.Object({
-    name: Type.String(),
-  }),
-);
+const querySchema = Compile(Type.Object({
+    name: Type.Optional(Type.String()),
+}));
 
 // Validation for response body, eg - `"Hello, John!"`
-const responseSchema = Type.String();
+const responseSchema = Compile(Type.String());
 ```
 
 These schemas will be used to generate the OpenAPI specifications for your Incoming requests and Outgoing responses.
 
-Now out of the box, TypeBox doesn't support Standard Schema, so you will need to use [TypeMap](https://github.com/sinclairzx81/typemap) to convert the TypeBox schema to any of the supported validation schemas. Then you can follow the steps for the corresponding validation schema.
+## Updating the Router
+
+Code below shows how you might be using Typebox with Hono for validation.
+
+```ts
+import { Hono } from "hono";
+import { tValidator } from "@hono/typebox-validator";
+
+const app = new Hono();
+
+app.get("/", tValidator("query", querySchema), (c) => {
+  const query = c.req.valid("query");
+  return c.text(`Hello ${query?.name ?? "Hono"}!`);
+});
+```
+
+Now, follow the steps below to integrate Hono OpenAPI -
+
+1. Inplace of importing the validation middleware (`tValidator`), from `@hono/typebox-validator`, import it from `hono-openapi`.
+2. For describing the response body or adding information about the route, import `describeRoute` from `hono-openapi`. If you will be defining the response body using Valibot, you will also need to import `resolver` from `hono-openapi`.
+3. You can uninstall `@hono/typebox-validator` as it is no longer needed.
+
+```ts
+import { Hono } from "hono";
+import {
+  validator as tValidator,
+  resolver,
+  describeRoute,
+} from "hono-openapi";
+
+const app = new Hono();
+
+app.get(
+  "/",
+  describeRoute({
+    responses: {
+      200: {
+        description: "Successful response",
+        content: {
+          "application/json": {
+            schema: resolver(responseSchema),
+          },
+        },
+      },
+    },
+  }),
+  tValidator("query", querySchema),
+  (c) => {
+    const query = c.req.valid("query");
+    return c.text(`Hello ${query?.name ?? "Hono"}!`);
+  },
+);
+```
+
+And that's it! You have successfully integrated Hono OpenAPI. Now you will have to do this for all the routes you want to document but there is a way to list all the routes, which we will cover in the [Generating the OpenAPI Spec](#generating-the-openapi-spec) section.
+
+You can also pass json schema directly to the `responses.200.content["application/json"].schema` if you don't want to use `resolver` from `hono-openapi`. This is useful if you have a static schema that you want to use for the response body.
+
+## Passing Reference
+
+You can use the `options` property (2nd argument) to pass the reference to the schema -
+
+```ts
+const schema = Compile(
+  Type.Object({
+    myString: Type.String(),
+    myUnion: Type.Union([Type.Number(), Type.Boolean()]),
+  }, {
+    description: "My neat object schema",
+    ref: "MyNeatObjectSchema",
+  }),
+);
+```
+
+## Adding typesense for response body
+
+Simply just create your response schema and pass it in the `describeResponse` function. This will automatically provide typesense for the response body.
+
+```ts
+const successResponseSchema = Compile(Type.Object({
+  message: Type.String(),
+}));
+
+const errorResponseSchema = Compile(Type.Object({
+  error: Type.String(),
+}));
+
+app.get(
+  "/",
+  describeResponse(
+    (c) => {
+      return c.json({ message: "Hello Hono!" }, 200);
+    },
+    {
+      200: {
+        description: "Success",
+        content: {
+          "application/json": {
+            vSchema: successResponseSchema,
+          },
+        },
+      },
+      400: {
+        description: "Error",
+        content: {
+          "application/json": {
+            vSchema: errorResponseSchema,
+          },
+        },
+      },
+    },
+  ),
+);
+```
+
+## Generating the OpenAPI Spec
+
+For serving the OpenAPI spec, you can use the `openAPIRouteHandler` from `hono-openapi`. This will automatically generate the OpenAPI spec based on the routes you have defined in your Hono app.
+
+In the example below, we will be serving the OpenAPI spec at `/openapi.json`.
+
+```ts
+import { Hono } from "hono";
+import { openAPIRouteHandler } from "hono-openapi";
+
+// Other hono apps
+import routes from "./routes";
+
+const main = new Hono();
+
+main.get(
+  "/openapi.json",
+  openAPIRouteHandler(routes, {
+    documentation: {
+      info: {
+        title: "Hono",
+        version: "1.0.0",
+        description: "API for greeting users",
+      },
+    },
+  }),
+);
+```
+
+Navigate to `/openapi.json` to see the generated OpenAPI spec. You can also use tools like [Scalar](https://scalar.com/) or Swagger UI to visualize the OpenAPI spec. Check out the [OpenAPI documentation](/docs/openapi/ui) for more details on how to use these tools.
+
+For quick testing, you can also pass `includeEmptyPaths: true` to the `openAPIRouteHandler` options. This will include all the routes in the hono app, even if they don't have any OpenAPI documentation. This is useful for debugging and testing purposes.
