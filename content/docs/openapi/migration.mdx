@@ -55,7 +55,7 @@ import { describeRoute, validator, resolver } from "hono-openapi";
 const app = new Hono();
 
 app.get(
-  '/users/{id}',
+  '/users/:id',
   describeRoute({
     responses: {
       200: {
