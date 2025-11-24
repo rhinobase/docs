@@ -3,3 +3,26 @@ title: 3rd Party Providers
 description: Using 3rd party providers to authenticate requests
 ---
 
+The simplest way to setup MCP Auth when using 3rd party auth providers.
+
+```ts
+import { Hono } from 'hono'
+import { simpleMcpAuthRouter } from '@hono/mcp'
+
+const app = new Hono()
+
+app.route(
+  '/',
+  simpleMcpAuthRouter({
+    issuer: '[auth provider domain]',
+    resourceServerUrl: new URL('http://localhost:3000/mcp'),
+  })
+)
+
+// ...
+// Logic to connect with the transport
+```
+
+Here is a video showing how to setup MCP Auth with 3rd party providers:
+
+<YoutubePlayer videoid="Y-qakyW2AFM" />
