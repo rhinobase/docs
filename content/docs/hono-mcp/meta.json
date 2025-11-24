@@ -1,13 +1,16 @@
 {
-    "root": true,
-    "title": "@hono/mcp",
-    "icon": "Package",
-    "pages": [
-        "---Introduction---",
-        "index",
-        "---Tutorials---",
-        "stateless",
-        "stateful",
-        "auth"
-    ]
+  "root": true,
+  "title": "@hono/mcp",
+  "icon": "Package",
+  "pages": [
+    "---Introduction---",
+    "index",
+    "---Tutorials---",
+    "stateless",
+    "stateful",
+    "---Authentication---",
+    "./auth/token",
+    "./auth/3rd-party",
+    "./auth/custom"
+  ]
 }
