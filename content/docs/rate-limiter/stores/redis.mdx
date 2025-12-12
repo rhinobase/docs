@@ -1,0 +1,234 @@
+---
+title: Redis Store
+description: Using Redis as a data store for hono-rate-limiter
+---
+
+The `RedisStore` uses Redis to store rate limit data, enabling consistent rate limiting across multiple servers and processes. It's ideal for production deployments where you need shared state.
+
+## Installation
+
+The Redis store requires a Redis client. You can use `@upstash/redis` for serverless environments or any Redis client that implements the required interface.
+
+```package-install
+hono-rate-limiter @upstash/redis
+```
+
+## Basic Usage
+
+```ts
+import { Hono } from "hono";
+import { rateLimiter } from "hono-rate-limiter";
+import { RedisStore } from "hono-rate-limiter/stores/redis";
+import { Redis } from "@upstash/redis";
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
+
+const app = new Hono();
+
+app.use(
+  rateLimiter({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    limit: 100,
+    keyGenerator: (c) => c.req.header("x-forwarded-for") ?? "",
+    store: new RedisStore({ client: redis }),
+  })
+);
+
+export default app;
+```
+
+## Configuration Options
+
+```ts
+new RedisStore({
+  client: redis,           // Required: Redis client instance
+  prefix: "hrl:",          // Optional: Key prefix (default: "hrl:")
+  resetExpiryOnChange: false, // Optional: Reset TTL on each hit
+});
+```
+
+### client
+
+The Redis client instance. Must implement the following interface:
+
+```ts
+type RedisClient = {
+  scriptLoad: (script: string) => Promise<string>;
+  evalsha: <TArgs extends unknown[], TData = unknown>(
+    sha1: string,
+    keys: string[],
+    args: TArgs,
+  ) => Promise<TData>;
+  decr: (key: string) => Promise<number>;
+  del: (key: string) => Promise<number>;
+};
+```
+
+### prefix
+
+A string prepended to all Redis keys. Useful for namespacing when sharing a Redis instance.
+
+```ts
+new RedisStore({
+  client: redis,
+  prefix: "api-rate-limit:", // Keys will be like "api-rate-limit:user-123"
+});
+```
+
+### resetExpiryOnChange
+
+When `true`, the key's TTL is reset each time the hit count changes. When `false` (default), the TTL is only set when the key is first created.
+
+```ts
+new RedisStore({
+  client: redis,
+  resetExpiryOnChange: true, // Sliding window behavior
+});
+```
+
+## Using with Upstash Redis
+
+[Upstash](https://upstash.com/) provides a serverless Redis service that works well with edge deployments.
+
+```ts
+import { Redis } from "@upstash/redis";
+import { RedisStore } from "hono-rate-limiter/stores/redis";
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
+
+const store = new RedisStore({ client: redis });
+```
+
+### Cloudflare Workers
+
+For Cloudflare Workers, use the Cloudflare-specific import:
+
+```ts
+import { Redis } from "@upstash/redis/cloudflare";
+import { RedisStore } from "hono-rate-limiter/stores/redis";
+
+export default {
+  async fetch(request: Request, env: Env) {
+    const redis = new Redis({
+      url: env.UPSTASH_REDIS_REST_URL,
+      token: env.UPSTASH_REDIS_REST_TOKEN,
+    });
+
+    const app = new Hono();
+    
+    app.use(
+      rateLimiter({
+        windowMs: 60_000,
+        limit: 100,
+        keyGenerator: (c) => c.req.header("cf-connecting-ip") ?? "",
+        store: new RedisStore({ client: redis }),
+      })
+    );
+
+    return app.fetch(request, env);
+  },
+};
+```
+
+## Using with Vercel KV
+
+[Vercel KV](https://vercel.com/docs/storage/vercel-kv) is a Redis-compatible key-value store built on Upstash.
+
+```ts
+import { kv } from "@vercel/kv";
+import { RedisStore } from "hono-rate-limiter/stores/redis";
+
+const store = new RedisStore({ client: kv });
+
+app.use(
+  rateLimiter({
+    windowMs: 60_000,
+    limit: 100,
+    keyGenerator: (c) => c.req.header("x-forwarded-for") ?? "",
+    store,
+  })
+);
+```
+
+## How It Works
+
+The Redis store uses Lua scripts for atomic operations, preventing race conditions when multiple requests arrive simultaneously.
+
+### Increment Script
+
+When a request comes in, the store:
+
+1. Increments the key's value atomically
+2. Sets the expiration if it's a new key or `resetExpiryOnChange` is true
+3. Returns both the hit count and time-to-expire
+
+```lua
+local totalHits = redis.call("INCR", KEYS[1])
+local timeToExpire = redis.call("PTTL", KEYS[1])
+if timeToExpire <= 0 or ARGV[1] == "1" then
+  redis.call("PEXPIRE", KEYS[1], tonumber(ARGV[2]))
+  timeToExpire = tonumber(ARGV[2])
+end
+return { totalHits, timeToExpire }
+```
+
+### Key Structure
+
+Keys are stored as: `{prefix}{clientKey}`
+
+For example, with the default prefix and an IP-based key:
+- Key: `hrl:192.168.1.1`
+- Value: Integer (hit count)
+- TTL: Automatically set to `windowMs`
+
+## Complete Example
+
+```ts
+import { Hono } from "hono";
+import { rateLimiter } from "hono-rate-limiter";
+import { RedisStore } from "hono-rate-limiter/stores/redis";
+import { Redis } from "@upstash/redis";
+
+const app = new Hono();
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
+
+// Rate limit by API key
+app.use(
+  "/api/*",
+  rateLimiter({
+    windowMs: 60 * 1000, // 1 minute
+    limit: 60, // 60 requests per minute
+    keyGenerator: (c) => {
+      const apiKey = c.req.header("x-api-key");
+      if (!apiKey) throw new Error("API key required");
+      return apiKey;
+    },
+    store: new RedisStore({
+      client: redis,
+      prefix: "api-limit:",
+    }),
+    handler: (c) => {
+      return c.json(
+        {
+          error: "Rate limit exceeded",
+          retryAfter: c.res.headers.get("Retry-After"),
+        },
+        429
+      );
+    },
+  })
+);
+
+export default app;
+```
+
