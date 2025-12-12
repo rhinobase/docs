@@ -1,0 +1,6 @@
+{
+  "root": true,
+  "title": "hono-rate-limiter",
+  "icon": "SlidersHorizontal",
+  "pages": ["---Introduction---", "index"]
+}
