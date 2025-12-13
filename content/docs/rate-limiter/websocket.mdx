@@ -123,8 +123,7 @@ For production deployments, use an external store to share rate limit state acro
 
 ```ts
 import { upgradeWebSocket } from "hono/cloudflare-workers";
-import { webSocketLimiter } from "hono-rate-limiter";
-import { RedisStore } from "hono-rate-limiter/stores/redis";
+import { webSocketLimiter, RedisStore } from "hono-rate-limiter";
 import { Redis } from "@upstash/redis";
 
 const redis = new Redis({
@@ -175,8 +174,7 @@ const { upgradeWebSocket } = createNodeWebSocket({ app });
 ```ts
 import { Hono } from "hono";
 import { upgradeWebSocket } from "hono/cloudflare-workers";
-import { webSocketLimiter } from "hono-rate-limiter";
-import { RedisStore } from "hono-rate-limiter/stores/redis";
+import { webSocketLimiter, RedisStore } from "hono-rate-limiter";
 
 const app = new Hono();
 

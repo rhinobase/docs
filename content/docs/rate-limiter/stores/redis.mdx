@@ -17,8 +17,7 @@ hono-rate-limiter @upstash/redis
 
 ```ts
 import { Hono } from "hono";
-import { rateLimiter } from "hono-rate-limiter";
-import { RedisStore } from "hono-rate-limiter/stores/redis";
+import { rateLimiter, RedisStore } from "hono-rate-limiter";
 import { Redis } from "@upstash/redis";
 
 const redis = new Redis({
@@ -95,7 +94,7 @@ new RedisStore({
 
 ```ts
 import { Redis } from "@upstash/redis";
-import { RedisStore } from "hono-rate-limiter/stores/redis";
+import { RedisStore } from "hono-rate-limiter";
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -111,7 +110,7 @@ For Cloudflare Workers, use the Cloudflare-specific import:
 
 ```ts
 import { Redis } from "@upstash/redis/cloudflare";
-import { RedisStore } from "hono-rate-limiter/stores/redis";
+import { rateLimiter, RedisStore } from "hono-rate-limiter";
 
 export default {
   async fetch(request: Request, env: Env) {
@@ -142,7 +141,7 @@ export default {
 
 ```ts
 import { kv } from "@vercel/kv";
-import { RedisStore } from "hono-rate-limiter/stores/redis";
+import { RedisStore } from "hono-rate-limiter";
 
 const store = new RedisStore({ client: kv });
 
@@ -191,8 +190,7 @@ For example, with the default prefix and an IP-based key:
 
 ```ts
 import { Hono } from "hono";
-import { rateLimiter } from "hono-rate-limiter";
-import { RedisStore } from "hono-rate-limiter/stores/redis";
+import { rateLimiter, RedisStore } from "hono-rate-limiter";
 import { Redis } from "@upstash/redis";
 
 const app = new Hono();

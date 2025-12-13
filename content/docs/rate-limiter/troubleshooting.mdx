@@ -50,8 +50,7 @@ Use a Cloudflare-compatible store instead:
 
 ```ts
 import { Hono } from "hono";
-import { rateLimiter } from "hono-rate-limiter";
-import { WorkersKVStore } from "hono-rate-limiter/stores/cloudflare";
+import { rateLimiter, WorkersKVStore } from "hono-rate-limiter";
 
 type Env = {
   RATE_LIMIT_KV: KVNamespace;
@@ -135,7 +134,7 @@ Clients can exceed the rate limit, or limits seem inconsistent.
 Use a shared external store like Redis:
 
 ```ts
-import { RedisStore } from "hono-rate-limiter/stores/redis";
+import { rateLimiter, RedisStore } from "hono-rate-limiter";
 
 rateLimiter({
   store: new RedisStore({ client: redis }),
@@ -148,7 +147,7 @@ rateLimiter({
 Use Cloudflare Durable Objects:
 
 ```ts
-import { DurableObjectStore } from "hono-rate-limiter/stores/cloudflare";
+import { rateLimiter, DurableObjectStore } from "hono-rate-limiter";
 
 rateLimiter({
   store: new DurableObjectStore({ namespace: env.RATE_LIMITER }),

@@ -23,8 +23,7 @@ unstorage @upstash/redis
 
 ```ts
 import { Hono } from "hono";
-import { rateLimiter } from "hono-rate-limiter";
-import { UnstorageStore } from "hono-rate-limiter/stores/unstorage";
+import { rateLimiter, UnstorageStore } from "hono-rate-limiter";
 import { createStorage } from "unstorage";
 import redisDriver from "unstorage/drivers/redis";
 
@@ -189,8 +188,7 @@ Example: `hrl:192.168.1.1`
 
 ```ts
 import { Hono } from "hono";
-import { rateLimiter } from "hono-rate-limiter";
-import { UnstorageStore } from "hono-rate-limiter/stores/unstorage";
+import { rateLimiter, UnstorageStore } from "hono-rate-limiter";
 import { createStorage } from "unstorage";
 import redisDriver from "unstorage/drivers/redis";
 

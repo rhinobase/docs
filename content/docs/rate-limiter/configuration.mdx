@@ -253,7 +253,7 @@ store: Store // Default: MemoryStore
 The data store used to track request counts. See [Data Stores](/docs/rate-limiter/stores) for available options.
 
 ```ts
-import { RedisStore } from "hono-rate-limiter/stores/redis";
+import { rateLimiter, RedisStore } from "hono-rate-limiter";
 
 rateLimiter({
   store: new RedisStore({ client: redisClient }),
@@ -361,8 +361,7 @@ app.post("/reset-limit", async (c) => {
 
 ```ts
 import { Hono } from "hono";
-import { rateLimiter } from "hono-rate-limiter";
-import { RedisStore } from "hono-rate-limiter/stores/redis";
+import { rateLimiter, RedisStore } from "hono-rate-limiter";
 
 const app = new Hono();
 

@@ -93,8 +93,7 @@ id = "your-namespace-id"
 
 ```ts
 import { Hono } from "hono";
-import { rateLimiter } from "hono-rate-limiter";
-import { WorkersKVStore } from "hono-rate-limiter/stores/cloudflare";
+import { rateLimiter, WorkersKVStore } from "hono-rate-limiter";
 
 type Env = {
   RATE_LIMIT_KV: KVNamespace;
@@ -156,7 +155,7 @@ First, create the Durable Object class by exporting it from your worker:
 
 ```ts
 // Export the Durable Object class
-export { DurableObjectRateLimiter } from "hono-rate-limiter/stores/cloudflare";
+export { DurableObjectRateLimiter } from "hono-rate-limiter";
 ```
 
 Add the Durable Object binding to your `wrangler.toml`:
@@ -176,11 +175,11 @@ new_classes = ["DurableObjectRateLimiter"]
 
 ```ts
 import { Hono } from "hono";
-import { rateLimiter } from "hono-rate-limiter";
 import {
+  rateLimiter,
   DurableObjectStore,
   DurableObjectRateLimiter,
-} from "hono-rate-limiter/stores/cloudflare";
+} from "hono-rate-limiter";
 
 // Re-export for Cloudflare to find the DO class
 export { DurableObjectRateLimiter };
@@ -267,11 +266,11 @@ Here's a complete Cloudflare Worker using Durable Objects:
 
 ```ts
 import { Hono } from "hono";
-import { rateLimiter } from "hono-rate-limiter";
 import {
+  rateLimiter,
   DurableObjectStore,
   DurableObjectRateLimiter,
-} from "hono-rate-limiter/stores/cloudflare";
+} from "hono-rate-limiter";
 
 // Re-export for Cloudflare
 export { DurableObjectRateLimiter };

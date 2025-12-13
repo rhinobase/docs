@@ -30,13 +30,13 @@ flowchart LR
 
 ## Available Stores
 
-| Store | Best For | Import Path |
-|-------|----------|-------------|
+| Store | Best For | Import |
+|-------|----------|--------|
 | [MemoryStore](#memorystore) | Development, single-process apps | Built-in (default) |
-| [RedisStore](/docs/rate-limiter/stores/redis) | Multi-server deployments | `hono-rate-limiter/stores/redis` |
-| [WorkersKVStore](/docs/rate-limiter/stores/cloudflare) | Cloudflare Workers | `hono-rate-limiter/stores/cloudflare` |
-| [DurableObjectStore](/docs/rate-limiter/stores/cloudflare) | Cloudflare Workers (precise) | `hono-rate-limiter/stores/cloudflare` |
-| [UnstorageStore](/docs/rate-limiter/stores/unstorage) | Universal (any backend) | `hono-rate-limiter/stores/unstorage` |
+| [RedisStore](/docs/rate-limiter/stores/redis) | Multi-server deployments | `import { RedisStore } from "hono-rate-limiter"` |
+| [WorkersKVStore](/docs/rate-limiter/stores/cloudflare) | Cloudflare Workers | `import { WorkersKVStore } from "hono-rate-limiter"` |
+| [DurableObjectStore](/docs/rate-limiter/stores/cloudflare) | Cloudflare Workers (precise) | `import { DurableObjectStore } from "hono-rate-limiter"` |
+| [UnstorageStore](/docs/rate-limiter/stores/unstorage) | Universal (any backend) | `import { UnstorageStore } from "hono-rate-limiter"` |
 
 ## MemoryStore
 
