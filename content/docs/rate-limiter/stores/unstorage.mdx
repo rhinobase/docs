@@ -1,0 +1,257 @@
+---
+title: Unstorage
+description: Universal storage backend for hono-rate-limiter
+---
+
+The `UnstorageStore` uses [Unstorage](https://unstorage.unjs.io/) to provide a universal storage layer. This allows you to use any of Unstorage's 20+ drivers as your rate limit backend, including Redis, Cloudflare KV, MongoDB, S3, and more.
+
+## Installation
+
+Install `hono-rate-limiter` and `unstorage`:
+
+```package-install
+hono-rate-limiter unstorage
+```
+
+Then install the driver for your chosen backend:
+
+```package-install
+unstorage @upstash/redis
+```
+
+## Basic Usage
+
+```ts
+import { Hono } from "hono";
+import { rateLimiter, UnstorageStore } from "hono-rate-limiter";
+import { createStorage } from "unstorage";
+import redisDriver from "unstorage/drivers/redis";
+
+const storage = createStorage({
+  driver: redisDriver({
+    url: process.env.REDIS_URL,
+  }),
+});
+
+const app = new Hono();
+
+app.use(
+  rateLimiter({
+    windowMs: 60 * 1000, // 1 minute
+    limit: 100,
+    keyGenerator: (c) => c.req.header("x-forwarded-for") ?? "",
+    store: new UnstorageStore({ storage }),
+  })
+);
+
+export default app;
+```
+
+## Configuration Options
+
+```ts
+new UnstorageStore({
+  storage: storageInstance, // Required: Unstorage instance
+  prefix: "hrl:",           // Optional: Key prefix (default: "hrl:")
+});
+```
+
+### storage
+
+An Unstorage storage instance created with `createStorage()`. See [Unstorage documentation](https://unstorage.unjs.io/) for available drivers.
+
+### prefix
+
+A string prepended to all keys. Useful for namespacing when sharing a storage backend.
+
+```ts
+new UnstorageStore({
+  storage,
+  prefix: "api-rate-limit:",
+});
+```
+
+## Available Drivers
+
+Unstorage supports many storage backends. Here are some popular options:
+
+### Memory (Development)
+
+```ts
+import { createStorage } from "unstorage";
+import memoryDriver from "unstorage/drivers/memory";
+
+const storage = createStorage({
+  driver: memoryDriver(),
+});
+```
+
+### Redis
+
+```ts
+import redisDriver from "unstorage/drivers/redis";
+
+const storage = createStorage({
+  driver: redisDriver({
+    url: process.env.REDIS_URL,
+    // Or individual options
+    // host: "localhost",
+    // port: 6379,
+    // password: "secret",
+  }),
+});
+```
+
+### Cloudflare KV
+
+```ts
+import cloudflareKVBindingDriver from "unstorage/drivers/cloudflare-kv-binding";
+
+// In your worker
+const storage = createStorage({
+  driver: cloudflareKVBindingDriver({
+    binding: env.MY_KV_NAMESPACE,
+  }),
+});
+```
+
+### MongoDB
+
+```ts
+import mongodbDriver from "unstorage/drivers/mongodb";
+
+const storage = createStorage({
+  driver: mongodbDriver({
+    connectionString: process.env.MONGODB_URI,
+    databaseName: "rate-limits",
+    collectionName: "hits",
+  }),
+});
+```
+
+### S3
+
+```ts
+import s3Driver from "unstorage/drivers/s3";
+
+const storage = createStorage({
+  driver: s3Driver({
+    bucket: "my-rate-limit-bucket",
+    region: "us-east-1",
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  }),
+});
+```
+
+### Vercel KV
+
+```ts
+import vercelKVDriver from "unstorage/drivers/vercel-kv";
+
+const storage = createStorage({
+  driver: vercelKVDriver({
+    url: process.env.KV_REST_API_URL,
+    token: process.env.KV_REST_API_TOKEN,
+  }),
+});
+```
+
+## How It Works
+
+The `UnstorageStore` stores rate limit data as JSON objects with the following structure:
+
+```ts
+{
+  totalHits: number;      // Current hit count
+  resetTime: string;      // ISO timestamp when window resets
+}
+```
+
+### Increment Logic
+
+When a request arrives:
+
+1. Fetch existing record for the key
+2. Check if current time is within the active window
+3. If active: increment `totalHits`
+4. If expired or new: reset to 1 hit with new `resetTime`
+5. Store updated record
+
+### Key Structure
+
+Keys are stored as: `{prefix}{clientKey}`
+
+Example: `hrl:192.168.1.1`
+
+## Complete Example
+
+```ts
+import { Hono } from "hono";
+import { rateLimiter, UnstorageStore } from "hono-rate-limiter";
+import { createStorage } from "unstorage";
+import redisDriver from "unstorage/drivers/redis";
+
+const app = new Hono();
+
+// Create storage with Redis driver
+const storage = createStorage({
+  driver: redisDriver({
+    url: process.env.REDIS_URL,
+    ttl: 900, // 15 minutes default TTL
+  }),
+});
+
+// Apply rate limiting
+app.use(
+  "/api/*",
+  rateLimiter({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    limit: 100,
+    keyGenerator: (c) => {
+      // Use API key from header
+      const apiKey = c.req.header("x-api-key");
+      if (apiKey) return `api:${apiKey}`;
+      // Fallback to IP
+      return `ip:${c.req.header("x-forwarded-for") ?? "unknown"}`;
+    },
+    store: new UnstorageStore({
+      storage,
+      prefix: "rate-limit:",
+    }),
+    message: {
+      error: "Rate limit exceeded",
+      message: "Please try again later",
+    },
+  })
+);
+
+app.get("/api/users", (c) => {
+  return c.json({ users: [] });
+});
+
+export default app;
+```
+
+## When to Use Unstorage
+
+**Choose Unstorage when:**
+
+- You want flexibility to switch backends without code changes
+- Your backend isn't directly supported by `hono-rate-limiter`
+- You're already using Unstorage in your application
+- You need a unified storage interface across your app
+
+**Consider dedicated stores when:**
+
+- You need maximum performance (dedicated stores may be more optimized)
+- You're using Cloudflare and want native integration
+- You need specific features like Lua scripts (Redis) or alarms (Durable Objects)
+
+## Driver Documentation
+
+For complete driver documentation and options, see:
+
+- [Unstorage Documentation](https://unstorage.unjs.io/)
+- [Available Drivers](https://unstorage.unjs.io/drivers)
+

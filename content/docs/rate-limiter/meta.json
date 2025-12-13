@@ -1,0 +1,19 @@
+{
+  "root": true,
+  "title": "hono-rate-limiter",
+  "icon": "SlidersHorizontal",
+  "pages": [
+    "---Introduction---",
+    "index",
+    "---Usage---",
+    "configuration",
+    "websocket",
+    "---Data Stores---",
+    "./stores/index",
+    "./stores/redis",
+    "./stores/cloudflare",
+    "./stores/unstorage",
+    "---Troubleshooting---",
+    "troubleshooting"
+  ]
+}

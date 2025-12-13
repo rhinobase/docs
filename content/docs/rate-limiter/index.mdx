@@ -1,0 +1,79 @@
+---
+title: Quick Start
+description: Getting started with hono-rate-limiter
+icon: Album
+---
+
+## Introduction
+
+[hono-rate-limiter](https://npmjs.com/package/hono-rate-limiter) is a rate limiting middleware for [Hono](https://hono.dev/). It helps protect your application from abuse by limiting the number of requests a client can make within a specified time window.
+
+Rate limiting is essential for:
+
+- Preventing API abuse and DDoS attacks
+- Ensuring fair usage across all clients
+- Protecting server resources
+- Complying with API usage policies
+
+## Installation
+
+You can install the `hono-rate-limiter` package using your preferred package manager.
+
+```package-install
+hono-rate-limiter
+```
+
+## Basic Usage
+
+Here's a minimal example to get started with rate limiting:
+
+```ts
+import { Hono } from "hono";
+import { rateLimiter } from "hono-rate-limiter";
+
+const app = new Hono();
+
+// Apply rate limiting middleware
+app.use(
+  rateLimiter({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    limit: 100, // Limit each client to 100 requests per window
+    keyGenerator: (c) => c.req.header("x-forwarded-for") ?? "", // Use IP address as key
+  })
+);
+
+app.get("/", (c) => c.text("Hello Hono!"));
+
+export default app;
+```
+
+This configuration limits each client to 100 requests per 15-minute window. When a client exceeds the limit, they receive a `429 Too Many Requests` response.
+
+## Understanding the Configuration
+
+The three essential options are:
+
+- **`windowMs`**: The time window in milliseconds for tracking requests (e.g., 15 minutes)
+- **`limit`**: Maximum number of requests allowed per window
+- **`keyGenerator`**: A function that returns a unique identifier for each client
+
+<Callout title="Important">
+The `keyGenerator` function is required. It determines how clients are identified for rate limiting purposes. Common choices include IP addresses, API keys, or user IDs.
+</Callout>
+
+## Rate Limit Headers
+
+By default, `hono-rate-limiter` sets standard rate limit headers on responses:
+
+- `RateLimit-Limit`: The maximum number of requests allowed
+- `RateLimit-Remaining`: The number of requests remaining in the current window
+- `RateLimit-Reset`: The time (in seconds) until the rate limit resets
+- `RateLimit-Policy`: The rate limit policy
+
+These headers follow the [IETF Rate Limit Headers specification](https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-ratelimit-headers-06) (draft-6 by default).
+
+## Next Steps
+
+- Learn about all [Configuration Options](/docs/rate-limiter/configuration)
+- Set up [WebSocket Rate Limiting](/docs/rate-limiter/websocket)
+- Choose a [Data Store](/docs/rate-limiter/stores) for production deployments

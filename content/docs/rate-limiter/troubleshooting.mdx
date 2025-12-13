@@ -1,0 +1,254 @@
+---
+title: Common Issues
+description: Common issues and solutions for hono-rate-limiter
+---
+
+## TypeScript Type Issues
+
+When using third-party stores that aren't officially supported, you may encounter TypeScript errors. This is because the store interface may not exactly match what `hono-rate-limiter` expects.
+
+### Solution
+
+Cast the store using `as unknown as Store`:
+
+```ts
+import { rateLimiter, type Store } from "hono-rate-limiter";
+import RedisStore from "rate-limit-redis";
+import { createClient } from "redis";
+
+const redisClient = createClient({ url: process.env.REDIS_URL });
+
+rateLimiter({
+  windowMs: 60_000,
+  limit: 100,
+  keyGenerator: (c) => c.req.header("x-forwarded-for") ?? "",
+  store: new RedisStore({
+    sendCommand: (...args: string[]) => redisClient.sendCommand(args),
+  }) as unknown as Store,
+});
+```
+
+This pattern works because the underlying store interface is compatible, even if TypeScript doesn't recognize it.
+
+## Cloudflare Global Scope Error
+
+When using `hono-rate-limiter` in Cloudflare Workers or Pages, you might see:
+
+```
+Uncaught Error: Disallowed operation called within global scope.
+Asynchronous I/O (ex: fetch() or connect()), setting a timeout,
+and generating random values are not allowed within global scope.
+```
+
+### Cause
+
+The default `MemoryStore` uses `setInterval` for cleanup, which Cloudflare doesn't allow in the global scope.
+
+### Solution
+
+Use a Cloudflare-compatible store instead:
+
+```ts
+import { Hono } from "hono";
+import { rateLimiter, WorkersKVStore } from "hono-rate-limiter";
+
+type Env = {
+  RATE_LIMIT_KV: KVNamespace;
+};
+
+const app = new Hono<{ Bindings: Env }>();
+
+// Initialize store inside the handler, not globally
+app.use(async (c, next) => {
+  const limiter = rateLimiter({
+    windowMs: 60_000,
+    limit: 100,
+    keyGenerator: (c) => c.req.header("cf-connecting-ip") ?? "",
+    store: new WorkersKVStore({
+      namespace: c.env.RATE_LIMIT_KV,
+    }),
+  });
+  return limiter(c, next);
+});
+
+export default app;
+```
+
+Or use the native [Cloudflare Rate Limiting API](/docs/rate-limiter/stores/cloudflare#workers-rate-limiting-api).
+
+## keyGenerator Not Working
+
+### Symptom
+
+All requests are being rate limited together, or rate limits aren't being applied correctly.
+
+### Cause
+
+The `keyGenerator` function is returning the same value for different clients, or returning an empty string.
+
+### Solution
+
+Ensure your `keyGenerator` returns a unique, non-empty string for each client:
+
+```ts
+// Bad: Returns empty string if header is missing
+keyGenerator: (c) => c.req.header("x-forwarded-for") ?? ""
+
+// Better: Use a fallback identifier
+keyGenerator: (c) => {
+  const ip = c.req.header("x-forwarded-for") 
+    ?? c.req.header("cf-connecting-ip")
+    ?? "unknown";
+  return ip;
+}
+
+// Best: Use multiple identifiers
+keyGenerator: (c) => {
+  const apiKey = c.req.header("x-api-key");
+  if (apiKey) return `api:${apiKey}`;
+  
+  const userId = c.get("userId");
+  if (userId) return `user:${userId}`;
+  
+  const ip = c.req.header("x-forwarded-for") ?? "unknown";
+  return `ip:${ip}`;
+}
+```
+
+## Rate Limits Not Enforced Correctly
+
+### Symptom
+
+Clients can exceed the rate limit, or limits seem inconsistent.
+
+### Possible Causes
+
+1. **Multiple instances without shared store**: Each server/process has its own count.
+2. **Eventually consistent store**: KV stores may briefly allow over-limit requests.
+3. **Clock skew**: Different servers have different times.
+
+### Solutions
+
+**For multi-server deployments:**
+
+Use a shared external store like Redis:
+
+```ts
+import { rateLimiter, RedisStore } from "hono-rate-limiter";
+
+rateLimiter({
+  store: new RedisStore({ client: redis }),
+  // ...
+});
+```
+
+**For strong consistency:**
+
+Use Cloudflare Durable Objects:
+
+```ts
+import { rateLimiter, DurableObjectStore } from "hono-rate-limiter";
+
+rateLimiter({
+  store: new DurableObjectStore({ namespace: env.RATE_LIMITER }),
+  // ...
+});
+```
+
+## Headers Not Being Set
+
+### Symptom
+
+Rate limit headers (`RateLimit-*`) are not appearing in responses.
+
+### Possible Causes
+
+1. Response is already finalized before headers can be set
+2. `standardHeaders` is set to `false`
+3. Another middleware is overwriting headers
+
+### Solution
+
+Ensure rate limiting middleware runs before response handlers:
+
+```ts
+// Correct order
+app.use(rateLimiter({ ... }));
+app.get("/", (c) => c.text("Hello"));
+
+// Verify standardHeaders is enabled
+rateLimiter({
+  standardHeaders: "draft-6", // or "draft-7" or true
+  // ...
+});
+```
+
+## Best Practices
+
+### Use Meaningful Keys
+
+Avoid using IP addresses alone:
+
+```ts
+// Not recommended: Many users may share an IP
+keyGenerator: (c) => c.req.header("x-forwarded-for") ?? ""
+
+// Recommended: Use API keys or user IDs
+keyGenerator: (c) => c.req.header("authorization") ?? ""
+```
+
+### Set Appropriate Limits
+
+Consider your API's actual capacity:
+
+```ts
+rateLimiter({
+  windowMs: 60 * 1000,  // 1 minute windows are easier to reason about
+  limit: 60,            // 1 request per second average
+  // ...
+});
+```
+
+### Handle Rate Limits Gracefully
+
+Provide helpful error messages:
+
+```ts
+rateLimiter({
+  handler: (c, next, options) => {
+    const retryAfter = c.res.headers.get("Retry-After");
+    return c.json(
+      {
+        error: "Rate limit exceeded",
+        message: `Please wait ${retryAfter} seconds before retrying`,
+        retryAfter: Number(retryAfter),
+      },
+      429
+    );
+  },
+  // ...
+});
+```
+
+### Use Skip for Internal Routes
+
+Don't rate limit health checks or internal endpoints:
+
+```ts
+rateLimiter({
+  skip: (c) => {
+    const path = c.req.path;
+    return path === "/health" || path.startsWith("/internal/");
+  },
+  // ...
+});
+```
+
+## Getting Help
+
+If you're still having issues:
+
+1. Check the [GitHub Discussions](https://github.com/rhinobase/hono-rate-limiter/discussions)
+2. Join the [Hono Discord](https://discord.gg/ze2j2yBxS8) and ask in the #help channel
+3. Open an [issue on GitHub](https://github.com/rhinobase/hono-rate-limiter/issues)
+

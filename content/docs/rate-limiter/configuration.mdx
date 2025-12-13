@@ -1,0 +1,397 @@
+---
+title: Configuration
+description: All configuration options for hono-rate-limiter
+---
+
+The `rateLimiter` middleware accepts a configuration object with the following options:
+
+## Required Options
+
+### keyGenerator
+
+```ts
+keyGenerator: (c: Context) => string | Promise<string>
+```
+
+A function that generates a unique identifier for each client. This is the only required option.
+
+```ts
+rateLimiter({
+  windowMs: 60_000,
+  limit: 100,
+  // Using IP address
+  keyGenerator: (c) => c.req.header("x-forwarded-for") ?? "",
+  // Or using API key
+  // keyGenerator: (c) => c.req.header("authorization") ?? "",
+  // Or using user ID from context
+  // keyGenerator: (c) => c.get("userId") ?? "",
+});
+```
+
+<Callout type="warn" title="Best Practice">
+Avoid using IP addresses alone as the key, since many users may share the same IP (e.g., behind NAT, corporate networks, or VPNs). Consider using API keys, user IDs, or a combination of identifiers.
+</Callout>
+
+## Core Options
+
+### windowMs
+
+```ts
+windowMs: number // Default: 60000 (1 minute)
+```
+
+The duration of the rate limiting window in milliseconds.
+
+```ts
+rateLimiter({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  // ...
+});
+```
+
+### limit
+
+```ts
+limit: number | ((c: Context) => number | Promise<number>) // Default: 5
+```
+
+The maximum number of requests allowed per window. Can be a number or a function that returns a number (useful for dynamic limits).
+
+```ts
+// Static limit
+rateLimiter({
+  limit: 100,
+  // ...
+});
+
+// Dynamic limit based on user type
+rateLimiter({
+  limit: (c) => {
+    const isPremium = c.get("isPremiumUser");
+    return isPremium ? 1000 : 100;
+  },
+  // ...
+});
+```
+
+## Response Options
+
+### message
+
+```ts
+message: string | object | ((c: Context) => string | object | Promise<string | object>)
+// Default: "Too many requests, please try again later."
+```
+
+The response body sent when a client is rate limited.
+
+```ts
+// String message
+rateLimiter({
+  message: "Rate limit exceeded. Please wait before making more requests.",
+  // ...
+});
+
+// JSON response
+rateLimiter({
+  message: { error: "Too many requests", retryAfter: "15 minutes" },
+  // ...
+});
+
+// Dynamic message
+rateLimiter({
+  message: (c) => ({
+    error: "Rate limit exceeded",
+    clientId: c.req.header("x-client-id"),
+  }),
+  // ...
+});
+```
+
+### statusCode
+
+```ts
+statusCode: StatusCode // Default: 429
+```
+
+The HTTP status code to send when a client is rate limited.
+
+```ts
+rateLimiter({
+  statusCode: 429, // Too Many Requests (default)
+  // ...
+});
+```
+
+### handler
+
+```ts
+handler: (c: Context, next: Next, options: ConfigType) => Response | Promise<Response>
+```
+
+A custom handler function called when a client exceeds the rate limit. By default, it returns a response with the configured `statusCode` and `message`.
+
+```ts
+rateLimiter({
+  handler: async (c, next, options) => {
+    // Log the rate limit event
+    console.log(`Rate limit exceeded for ${await options.keyGenerator(c)}`);
+
+    // Return custom response
+    return c.json(
+      {
+        error: "Too many requests",
+        retryAfter: c.res.headers.get("Retry-After"),
+      },
+      429
+    );
+  },
+  // ...
+});
+```
+
+## Header Options
+
+### standardHeaders
+
+```ts
+standardHeaders: boolean | "draft-6" | "draft-7" // Default: "draft-6"
+```
+
+Controls which rate limit headers are included in responses.
+
+- `"draft-6"` (default): Sets `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, and `RateLimit-Policy` headers
+- `"draft-7"`: Sets a combined `RateLimit` header and `RateLimit-Policy`
+- `true`: Same as `"draft-6"`
+- `false`: Disables rate limit headers
+
+```ts
+rateLimiter({
+  standardHeaders: "draft-7", // Use newer combined header format
+  // ...
+});
+```
+
+## Skip Options
+
+### skip
+
+```ts
+skip: (c: Context) => boolean | Promise<boolean> // Default: () => false
+```
+
+A function to determine whether to skip rate limiting for a request.
+
+```ts
+rateLimiter({
+  skip: (c) => {
+    // Skip rate limiting for admin users
+    return c.get("isAdmin") === true;
+  },
+  // ...
+});
+```
+
+### skipFailedRequests
+
+```ts
+skipFailedRequests: boolean // Default: false
+```
+
+If `true`, requests that result in a response with status code >= 400 won't count against the rate limit.
+
+```ts
+rateLimiter({
+  skipFailedRequests: true, // Don't count failed requests
+  // ...
+});
+```
+
+### skipSuccessfulRequests
+
+```ts
+skipSuccessfulRequests: boolean // Default: false
+```
+
+If `true`, requests that result in a response with status code < 400 won't count against the rate limit.
+
+```ts
+rateLimiter({
+  skipSuccessfulRequests: true, // Only count failed requests
+  // ...
+});
+```
+
+### requestWasSuccessful
+
+```ts
+requestWasSuccessful: (c: Context) => boolean | Promise<boolean>
+// Default: (c) => c.res.status < 400
+```
+
+A function to determine whether a request was successful. Used with `skipFailedRequests` and `skipSuccessfulRequests`.
+
+```ts
+rateLimiter({
+  skipFailedRequests: true,
+  requestWasSuccessful: (c) => {
+    // Consider only 2xx responses as successful
+    return c.res.status >= 200 && c.res.status < 300;
+  },
+  // ...
+});
+```
+
+## Store Options
+
+### store
+
+```ts
+store: Store // Default: MemoryStore
+```
+
+The data store used to track request counts. See [Data Stores](/docs/rate-limiter/stores) for available options.
+
+```ts
+import { rateLimiter, RedisStore } from "hono-rate-limiter";
+
+rateLimiter({
+  store: new RedisStore({ client: redisClient }),
+  // ...
+});
+```
+
+## Cloudflare Rate Limiting API
+
+When deploying to Cloudflare Workers, you can use Cloudflare's native Rate Limiting API instead of a store. This uses a different configuration type with the `binding` option.
+
+### binding
+
+```ts
+binding: RateLimit | ((c: Context) => RateLimit)
+```
+
+The Cloudflare rate limit binding configured in your `wrangler.toml`. When using `binding`, you don't need `windowMs`, `limit`, or `store` options — the rate limit is configured in the binding itself.
+
+First, add the binding to your `wrangler.toml`:
+
+```toml
+[[unsafe.bindings]]
+name = "MY_RATE_LIMITER"
+type = "ratelimit"
+namespace_id = "1001"
+simple = { limit = 100, period = 60 }
+```
+
+Then use it in your code:
+
+```ts
+import { Hono } from "hono";
+import { rateLimiter } from "hono-rate-limiter";
+
+type Env = {
+  MY_RATE_LIMITER: RateLimit;
+};
+
+const app = new Hono<{ Bindings: Env }>();
+
+app.use(
+  rateLimiter<{ Bindings: Env }>({
+    binding: (c) => c.env.MY_RATE_LIMITER,
+    keyGenerator: (c) => c.req.header("cf-connecting-ip") ?? "",
+  })
+);
+
+export default app;
+```
+
+<Callout title="Cloudflare Configuration">
+When using `binding`, the rate limit configuration (limit and window) is defined in `wrangler.toml`, not in your code. The `rateLimiter` only needs `binding`, `keyGenerator`, and optionally `message`, `statusCode`, `handler`, and `skip`.
+</Callout>
+
+See [Cloudflare Stores](/docs/rate-limiter/stores/cloudflare) for more details on Cloudflare-specific rate limiting options.
+
+## Context Properties
+
+### requestPropertyName
+
+```ts
+requestPropertyName: string // Default: "rateLimit"
+```
+
+The name of the property on the Hono context where rate limit info is stored.
+
+```ts
+rateLimiter({
+  requestPropertyName: "rateLimit",
+  // ...
+});
+
+// Access in your handler
+app.get("/", (c) => {
+  const rateLimitInfo = c.get("rateLimit");
+  // { limit: 100, used: 5, remaining: 95, resetTime: Date }
+  return c.json(rateLimitInfo);
+});
+```
+
+### requestStorePropertyName
+
+```ts
+requestStorePropertyName: string // Default: "rateLimitStore"
+```
+
+The name of the property on the Hono context where store methods are exposed.
+
+```ts
+rateLimiter({
+  requestStorePropertyName: "rateLimitStore",
+  // ...
+});
+
+// Access in your handler
+app.post("/reset-limit", async (c) => {
+  const store = c.get("rateLimitStore");
+  await store.resetKey("some-client-key");
+  return c.text("Rate limit reset");
+});
+```
+
+## Complete Example
+
+```ts
+import { Hono } from "hono";
+import { rateLimiter, RedisStore } from "hono-rate-limiter";
+
+const app = new Hono();
+
+app.use(
+  rateLimiter({
+    // Time window
+    windowMs: 15 * 60 * 1000, // 15 minutes
+
+    // Request limit
+    limit: (c) => (c.get("isPremium") ? 1000 : 100),
+
+    // Client identification
+    keyGenerator: (c) => c.req.header("authorization") ?? c.req.header("x-forwarded-for") ?? "",
+
+    // Response configuration
+    message: { error: "Rate limit exceeded", code: "RATE_LIMIT" },
+    statusCode: 429,
+
+    // Headers
+    standardHeaders: "draft-6",
+
+    // Skip logic
+    skip: (c) => c.req.path.startsWith("/health"),
+    skipFailedRequests: true,
+
+    // Data store
+    store: new RedisStore({ client: redisClient }),
+  })
+);
+
+export default app;
+```
+
