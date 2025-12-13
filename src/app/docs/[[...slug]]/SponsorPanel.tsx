@@ -34,17 +34,17 @@ export default async function SponsorPanel() {
     <>
       {sponsors.length > 0 && (
         <div className="space-y-1 mt-5 rounded-xl overflow-hidden">
-      {fullSizeSponsors.map((sponsor) => (
-        <SponsorBlock key={sponsor.name} sponsor={sponsor} />
-      ))}
+          {fullSizeSponsors.map((sponsor) => (
+            <SponsorBlock key={sponsor.name} sponsor={sponsor} />
+          ))}
           {smallSizeSponsors.length > 0 && (
-      <div className="grid grid-cols-2 gap-1">
-        {smallSizeSponsors.map((sponsor, index) => (
-          <SponsorBlock key={sponsor?.name ?? index} sponsor={sponsor} />
-        ))}
-      </div>
+            <div className="grid grid-cols-2 gap-1">
+              {smallSizeSponsors.map((sponsor, index) => (
+                <SponsorBlock key={sponsor?.name ?? index} sponsor={sponsor} />
+              ))}
+            </div>
           )}
-    </div>
+        </div>
       )}
       <a
         href="https://github.com/sponsors/rhinobase"
@@ -90,9 +90,9 @@ function SponsorBlock(props: { sponsor?: Sponsor }) {
             src={sponsor.image}
             alt={sponsor.name}
             className="object-contain"
-        width={150}
-        height={150}
-      />
+            width={150}
+            height={150}
+          />
         ) : (
           sponsor.image
         )}
