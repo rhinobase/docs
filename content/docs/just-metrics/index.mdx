@@ -1,0 +1,255 @@
+---
+title: Quick Start
+description: Getting started with just-metrics
+icon: Album
+---
+
+## Introduction
+
+[just-metrics](https://npmjs.com/package/just-metrics) is a lightweight Sentry metrics SDK for sending counter, gauge, and distribution metrics. It provides a simple, zero-dependency way to send custom metrics to Sentry without pulling in the full Sentry SDK.
+
+## Installation
+
+```package-install
+just-metrics
+```
+
+## Basic Usage
+
+```ts
+import { createMetrics } from "just-metrics";
+
+const metrics = createMetrics("https://key@org.ingest.sentry.io/project");
+
+// Increment a counter
+metrics.count("api.requests", 1);
+
+// Set a gauge value
+metrics.gauge("queue.depth", 42);
+
+// Record a distribution value
+metrics.distribution("response.time", 125.5);
+```
+
+## Metric Types
+
+### Counter
+
+Counters track cumulative values that only go up (like total requests or errors).
+
+```ts
+// Increment by 1 (default)
+metrics.count("checkout.completed");
+
+// Increment by specific amount
+metrics.count("items.purchased", 5);
+```
+
+### Gauge
+
+Gauges track values that can go up or down (like queue depth or active connections).
+
+```ts
+metrics.gauge("active.connections", 150);
+metrics.gauge("memory.usage", 0.75);
+```
+
+### Distribution
+
+Distributions track a set of values to compute percentiles, averages, and other statistics.
+
+```ts
+metrics.distribution("response.time", 125.5);
+metrics.distribution("payload.size", 2048);
+```
+
+## Options
+
+All metric methods accept an optional third argument with additional options:
+
+### unit
+
+Specify the unit of measurement for better visualization in Sentry.
+
+```ts
+metrics.distribution("response.time", 125.5, {
+  unit: "millisecond",
+});
+
+metrics.gauge("queue.depth", 42, {
+  unit: "items",
+});
+
+metrics.distribution("revenue", 99.99, {
+  unit: "usd",
+});
+```
+
+### attributes
+
+Add key-value pairs to provide context and enable filtering in Sentry.
+
+```ts
+metrics.count("checkout.failed", 1, {
+  attributes: {
+    route: "/checkout",
+    tenant: "acme",
+    environment: "production",
+  },
+});
+
+metrics.distribution("response.time", 125.5, {
+  unit: "millisecond",
+  attributes: {
+    endpoint: "/api/users",
+    method: "GET",
+    status: 200,
+  },
+});
+```
+
+Attribute values can be strings, numbers, or booleans:
+
+```ts
+metrics.count("feature.used", 1, {
+  attributes: {
+    feature: "dark-mode",      // string
+    userId: 12345,             // number
+    isPremium: true,           // boolean
+  },
+});
+```
+
+## Buffering & Flushing
+
+Metrics are automatically buffered and sent in batches for efficiency:
+
+- **Time-based**: Flushed every 5 seconds
+- **Size-based**: Flushed when 100 metrics accumulate
+
+### Manual Flush
+
+You can manually flush metrics when needed (e.g., before process exit):
+
+```ts
+// Flush all buffered metrics
+await metrics.flush();
+```
+
+This is useful in serverless environments or when you need to ensure metrics are sent before the process terminates.
+
+## Complete Example
+
+```ts
+import { createMetrics } from "just-metrics";
+
+const metrics = createMetrics(process.env.SENTRY_DSN!);
+
+// Track API requests
+app.use(async (c, next) => {
+  const start = performance.now();
+  
+  await next();
+  
+  const duration = performance.now() - start;
+  
+  // Record request metrics
+  metrics.count("api.requests", 1, {
+    attributes: {
+      path: c.req.path,
+      method: c.req.method,
+      status: c.res.status,
+    },
+  });
+  
+  metrics.distribution("api.latency", duration, {
+    unit: "millisecond",
+    attributes: {
+      path: c.req.path,
+    },
+  });
+});
+
+// Track business metrics
+function processOrder(order: Order) {
+  metrics.count("orders.processed", 1, {
+    attributes: {
+      region: order.region,
+      type: order.type,
+    },
+  });
+  
+  metrics.distribution("order.value", order.total, {
+    unit: "usd",
+    attributes: {
+      currency: order.currency,
+    },
+  });
+}
+
+// Track system metrics
+setInterval(() => {
+  metrics.gauge("queue.depth", getQueueDepth(), {
+    unit: "items",
+  });
+  
+  metrics.gauge("memory.usage", process.memoryUsage().heapUsed, {
+    unit: "byte",
+  });
+}, 10000);
+
+// Flush on shutdown
+process.on("SIGTERM", async () => {
+  await metrics.flush();
+  process.exit(0);
+});
+```
+
+## API Reference
+
+### createMetrics(dsn)
+
+Creates a new metrics client.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `dsn` | `string` | Your Sentry DSN (e.g., `https://key@org.ingest.sentry.io/project`) |
+
+Returns a `Metrics` object with the following methods:
+
+### metrics.count(name, value?, options?)
+
+Increment a counter metric.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `name` | `string` | - | Metric name |
+| `value` | `number` | `1` | Amount to increment |
+| `options` | `MetricOptions` | - | Optional unit and attributes |
+
+### metrics.gauge(name, value, options?)
+
+Set a gauge value.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `string` | Metric name |
+| `value` | `number` | Current value |
+| `options` | `MetricOptions` | Optional unit and attributes |
+
+### metrics.distribution(name, value, options?)
+
+Record a distribution value.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `string` | Metric name |
+| `value` | `number` | Value to record |
+| `options` | `MetricOptions` | Optional unit and attributes |
+
+### metrics.flush()
+
+Manually flush all buffered metrics to Sentry.
+
+Returns: `Promise<void>`
+

@@ -3,17 +3,11 @@ title: Cloudflare
 description: Rate limiting on Cloudflare Workers with hono-rate-limiter
 ---
 
-`hono-rate-limiter` provides multiple options for rate limiting on Cloudflare Workers. Choose the approach that best fits your needs:
+If you're deploying to Cloudflare Workers, we recommend using Cloudflare's native [Rate Limiting API](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/). It's built into the Workers runtime, requires no external dependencies, and provides excellent performance with minimal latency.
 
-| Approach | Best For | Consistency | Cost |
-|----------|----------|-------------|------|
-| [Rate Limiting API](#workers-rate-limiting-api) | Simple, native rate limiting | High | Included |
-| [Workers KV](#workers-kv-store) | Global distribution | Eventually consistent | KV pricing |
-| [Durable Objects](#durable-objects-store) | Precise, transactional | Strong | DO pricing |
+## Rate Limiting API
 
-## Workers Rate Limiting API
-
-Cloudflare's native [Rate Limiting API](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/) is the simplest approach. It uses Cloudflare's built-in rate limiting infrastructure without requiring external stores.
+Cloudflare's Rate Limiting API is the simplest and most efficient way to add rate limiting to your Cloudflare Workers. It uses Cloudflare's built-in infrastructure at the edge.
 
 ### Configuration
 
@@ -54,7 +48,7 @@ simple = { limit = 100, period = 60 }
 
 ### Usage
 
-Use the `rateLimiter` with the `binding` option instead of `store`:
+Use the `rateLimiter` with the `binding` option:
 
 ```ts
 import { Hono } from "hono";
@@ -80,12 +74,11 @@ export default app;
 
 ### How It Works
 
-When you use the `binding` option, `hono-rate-limiter` switches to Cloudflare's native rate limiting:
+When you use the `binding` option, `hono-rate-limiter` uses Cloudflare's native rate limiting:
 
 - Rate limits are configured in your Wrangler config, not in code
 - No `windowMs` or `limit` options needed (configured in binding)
 - The rate limit check is performed at the edge with minimal latency
-- Results are stored by `c.set("rateLimit", success)` as a boolean
 - Rate limits are local to each [Cloudflare location](https://www.cloudflare.com/network/)
 
 ### Configuration Options
@@ -157,9 +150,66 @@ app.use(
 );
 ```
 
-## Workers KV Store
+### Complete Example
+
+```ts
+import { Hono } from "hono";
+import { rateLimiter } from "hono-rate-limiter";
+
+type Env = {
+  API_RATE_LIMITER: RateLimit;
+};
+
+const app = new Hono<{ Bindings: Env }>();
+
+// Apply rate limiting to API routes
+app.use(
+  "/api/*",
+  rateLimiter<{ Bindings: Env }>({
+    binding: (c) => c.env.API_RATE_LIMITER,
+    keyGenerator: (c) => {
+      // Use API key if available, fallback to IP
+      return c.req.header("x-api-key") ?? c.req.header("cf-connecting-ip") ?? "";
+    },
+    message: { error: "Rate limit exceeded", retryAfter: "60s" },
+  })
+);
+
+app.get("/api/data", (c) => {
+  return c.json({ message: "Hello from the API!" });
+});
+
+export default app;
+```
+
+With `wrangler.toml`:
+
+```toml
+name = "my-rate-limited-api"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[[ratelimits]]
+name = "API_RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 100, period = 60 }
+```
+
+---
+
+## Workers KV Store (Legacy)
+
+<Callout type="warn" title="Legacy">
+This store is available via the [`@hono-rate-limiter/cloudflare`](https://www.npmjs.com/package/@hono-rate-limiter/cloudflare) package. We recommend using the [Rate Limiting API](#rate-limiting-api-recommended) instead for new projects.
+</Callout>
 
 Use Cloudflare KV for globally distributed rate limiting. KV provides eventual consistency, which is suitable for most rate limiting use cases.
+
+### Installation
+
+```package-install
+@hono-rate-limiter/cloudflare
+```
 
 ### Configuration
 
@@ -175,7 +225,8 @@ id = "your-namespace-id"
 
 ```ts
 import { Hono } from "hono";
-import { rateLimiter, WorkersKVStore } from "hono-rate-limiter";
+import { rateLimiter } from "hono-rate-limiter";
+import { WorkersKVStore } from "@hono-rate-limiter/cloudflare";
 
 type Env = {
   RATE_LIMIT_KV: KVNamespace;
@@ -183,23 +234,6 @@ type Env = {
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.use(
-  rateLimiter<{ Bindings: Env }>({
-    windowMs: 60 * 1000, // 1 minute
-    limit: 100,
-    keyGenerator: (c) => c.req.header("cf-connecting-ip") ?? "",
-    store: new WorkersKVStore({ namespace: c.env.RATE_LIMIT_KV }),
-  })
-);
-
-export default app;
-```
-
-### Dynamic Store Initialization
-
-Since KV namespace is accessed via `c.env`, you need to initialize the store per-request:
-
-```ts
 app.use(async (c, next) => {
   const limiter = rateLimiter({
     windowMs: 60_000,
@@ -207,11 +241,12 @@ app.use(async (c, next) => {
     keyGenerator: (c) => c.req.header("cf-connecting-ip") ?? "",
     store: new WorkersKVStore({
       namespace: c.env.RATE_LIMIT_KV,
-      prefix: "rl:",
     }),
   });
   return limiter(c, next);
 });
+
+export default app;
 ```
 
 ### Configuration Options
@@ -227,9 +262,26 @@ new WorkersKVStore({
 Cloudflare KV has a minimum expiration of 60 seconds. The store automatically adjusts expiration times to meet this requirement. This doesn't affect rate limiting behavior, which is controlled by `resetTime`.
 </Callout>
 
-## Durable Objects Store
+### Limitations
+
+- **Eventually consistent**: May briefly allow over-limit requests
+- **60-second minimum expiration**: Cannot use shorter windows
+
+---
+
+## Durable Objects Store (Legacy)
+
+<Callout type="warn" title="Legacy">
+This store is available via the [`@hono-rate-limiter/cloudflare`](https://www.npmjs.com/package/@hono-rate-limiter/cloudflare) package. We recommend using the [Rate Limiting API](#rate-limiting-api-recommended) instead for new projects.
+</Callout>
 
 Durable Objects provide strong consistency and are ideal when you need precise rate limiting with transactional guarantees.
+
+### Installation
+
+```package-install
+@hono-rate-limiter/cloudflare
+```
 
 ### Configuration
 
@@ -237,7 +289,7 @@ First, create the Durable Object class by exporting it from your worker:
 
 ```ts
 // Export the Durable Object class
-export { DurableObjectRateLimiter } from "hono-rate-limiter";
+export { DurableObjectRateLimiter } from "@hono-rate-limiter/cloudflare";
 ```
 
 Add the Durable Object binding to your `wrangler.toml`:
@@ -257,11 +309,11 @@ new_classes = ["DurableObjectRateLimiter"]
 
 ```ts
 import { Hono } from "hono";
+import { rateLimiter } from "hono-rate-limiter";
 import {
-  rateLimiter,
   DurableObjectStore,
   DurableObjectRateLimiter,
-} from "hono-rate-limiter";
+} from "@hono-rate-limiter/cloudflare";
 
 // Re-export for Cloudflare to find the DO class
 export { DurableObjectRateLimiter };
@@ -305,103 +357,9 @@ The `DurableObjectRateLimiter` class extends Cloudflare's `DurableObject`:
 3. An alarm is set to reset the count when the window expires
 4. Operations are strongly consistent within each DO
 
-## Comparison
+### Limitations
 
-### Workers Rate Limiting API
-
-**Pros:**
-- Native Cloudflare integration
-- No external dependencies
-- Simple configuration
-- Edge-optimized
-
-**Cons:**
-- Rate limits configured in `wrangler.toml`, not code
-- Less flexibility in rate limit logic
-
-### Workers KV
-
-**Pros:**
-- Globally distributed
-- Low latency reads
-- Simple setup
-
-**Cons:**
-- Eventually consistent (may briefly allow over-limit)
-- 60-second minimum expiration
-
-### Durable Objects
-
-**Pros:**
-- Strong consistency
-- Transactional guarantees
-- Automatic cleanup via alarms
-
-**Cons:**
-- Higher latency (single point of coordination)
-- More complex setup
-- Higher cost for high-traffic scenarios
-
-## Complete Example
-
-Here's a complete Cloudflare Worker using Durable Objects:
-
-```ts
-import { Hono } from "hono";
-import {
-  rateLimiter,
-  DurableObjectStore,
-  DurableObjectRateLimiter,
-} from "hono-rate-limiter";
-
-// Re-export for Cloudflare
-export { DurableObjectRateLimiter };
-
-type Env = {
-  RATE_LIMITER: DurableObjectNamespace<DurableObjectRateLimiter>;
-};
-
-const app = new Hono<{ Bindings: Env }>();
-
-// Rate limit middleware
-app.use("/api/*", async (c, next) => {
-  const limiter = rateLimiter({
-    windowMs: 60 * 1000,
-    limit: 100,
-    keyGenerator: (c) => {
-      // Use API key if available, fallback to IP
-      return c.req.header("x-api-key") ?? c.req.header("cf-connecting-ip") ?? "";
-    },
-    store: new DurableObjectStore({
-      namespace: c.env.RATE_LIMITER,
-      prefix: "api:",
-    }),
-    message: { error: "Rate limit exceeded", retryAfter: "60s" },
-  });
-  return limiter(c, next);
-});
-
-app.get("/api/data", (c) => {
-  return c.json({ message: "Hello from the API!" });
-});
-
-export default app;
-```
-
-With `wrangler.toml`:
-
-```toml
-name = "my-rate-limited-api"
-main = "src/index.ts"
-compatibility_date = "2024-01-01"
-
-[durable_objects]
-bindings = [
-  { name = "RATE_LIMITER", class_name = "DurableObjectRateLimiter" }
-]
-
-[[migrations]]
-tag = "v1"
-new_classes = ["DurableObjectRateLimiter"]
-```
+- **Higher latency**: Single point of coordination per key
+- **Complex setup**: Requires migrations and class exports
+- **Higher cost**: More expensive for high-traffic scenarios
 
