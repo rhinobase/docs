@@ -1,0 +1,538 @@
+---
+title: Query Types
+description: Type-safe filters, projections, and update operations
+---
+
+## Overview
+
+momos provides fully typed query operations that give you autocomplete and type checking for MongoDB queries. All query types are inferred from your schema definition.
+
+## Filter Types
+
+The `Filter<Doc>` type provides type-safe query filters for your documents.
+
+### Basic Equality
+
+Match documents where a field equals a value:
+
+```ts
+// Simple equality
+await users.find({ name: "John" }).toArray();
+
+// Multiple conditions (implicit AND)
+await users.find({
+  name: "John",
+  age: 30,
+}).toArray();
+```
+
+### Comparison Operators
+
+Use comparison operators with full type safety:
+
+```ts
+// Greater than / less than
+await users.find({
+  age: { $gt: 18 },
+  score: { $lte: 100 },
+}).toArray();
+
+// Not equal
+await users.find({
+  status: { $ne: "inactive" },
+}).toArray();
+
+// In array of values
+await users.find({
+  role: { $in: ["admin", "moderator"] },
+}).toArray();
+
+// Not in array
+await users.find({
+  status: { $nin: ["banned", "suspended"] },
+}).toArray();
+```
+
+| Operator | Description |
+| -------- | ----------- |
+| `$eq` | Matches values equal to a specified value |
+| `$ne` | Matches values not equal to a specified value |
+| `$gt` | Matches values greater than a specified value |
+| `$gte` | Matches values greater than or equal to |
+| `$lt` | Matches values less than a specified value |
+| `$lte` | Matches values less than or equal to |
+| `$in` | Matches any value in an array |
+| `$nin` | Matches none of the values in an array |
+
+### Element Operators
+
+Check for field existence or type:
+
+```ts
+// Field exists
+await users.find({
+  nickname: { $exists: true },
+}).toArray();
+
+// Field type
+await users.find({
+  age: { $type: "number" },
+}).toArray();
+```
+
+### String Operators
+
+Match strings with regular expressions:
+
+```ts
+// Regex match
+await users.find({
+  email: { $regex: /@gmail\.com$/ },
+}).toArray();
+
+// Case-insensitive search
+await users.find({
+  name: { $regex: "john", $options: "i" },
+}).toArray();
+```
+
+### Array Operators
+
+Query array fields with specialized operators:
+
+```ts
+const postSchema = z.object({
+  title: z.string(),
+  tags: z.array(z.string()),
+  comments: z.array(z.object({
+    author: z.string(),
+    text: z.string(),
+  })),
+});
+
+const posts = defineCollection(db, "posts", postSchema);
+
+// Match all elements
+await posts.find({
+  tags: { $all: ["mongodb", "typescript"] },
+}).toArray();
+
+// Array size
+await posts.find({
+  tags: { $size: 3 },
+}).toArray();
+
+// Element match for objects in arrays
+await posts.find({
+  comments: {
+    $elemMatch: {
+      author: "john",
+      text: { $regex: "great" },
+    },
+  },
+}).toArray();
+```
+
+| Operator | Description |
+| -------- | ----------- |
+| `$all` | Matches arrays containing all specified elements |
+| `$size` | Matches arrays with a specific length |
+| `$elemMatch` | Matches arrays with at least one element matching all conditions |
+
+### Logical Operators
+
+Combine conditions with logical operators:
+
+```ts
+// OR condition
+await users.find({
+  $or: [
+    { age: { $lt: 18 } },
+    { role: "minor" },
+  ],
+}).toArray();
+
+// AND condition (explicit)
+await users.find({
+  $and: [
+    { age: { $gte: 18 } },
+    { age: { $lte: 65 } },
+  ],
+}).toArray();
+
+// NOR - matches none of the conditions
+await users.find({
+  $nor: [
+    { status: "banned" },
+    { status: "suspended" },
+  ],
+}).toArray();
+```
+
+### Nested Fields
+
+Query nested object fields using dot notation:
+
+```ts
+const userSchema = z.object({
+  name: z.string(),
+  address: z.object({
+    city: z.string(),
+    country: z.string(),
+    zip: z.string(),
+  }),
+});
+
+const users = defineCollection(db, "users", userSchema);
+
+// Query nested field
+await users.find({
+  "address.city": "New York",
+  "address.country": "USA",
+}).toArray();
+```
+
+### Text Search
+
+Use text search for indexed text fields:
+
+```ts
+// Create text index first
+await posts.createIndex({ title: "text", content: "text" });
+
+// Text search
+await posts.find({
+  $text: {
+    $search: "mongodb tutorial",
+    $caseSensitive: false,
+  },
+}).toArray();
+```
+
+## Projection Types
+
+Control which fields are returned in query results.
+
+### Include Fields
+
+Specify which fields to include:
+
+```ts
+const cursor = users
+  .find({})
+  .project({ name: 1, email: 1 });
+
+// Results only contain _id, name, email
+```
+
+### Exclude Fields
+
+Specify which fields to exclude:
+
+```ts
+const cursor = users
+  .find({})
+  .project({ password: 0, secretKey: 0 });
+
+// Results contain all fields except password and secretKey
+```
+
+### Exclude \_id
+
+The `_id` field is always included by default. Exclude it explicitly:
+
+```ts
+const cursor = users
+  .find({})
+  .project({ name: 1, email: 1, _id: 0 });
+
+// Results contain only name and email
+```
+
+<Callout title="Note">
+You cannot mix inclusion and exclusion in the same projection (except for `_id`).
+</Callout>
+
+## Sort Types
+
+Sort query results by one or more fields:
+
+```ts
+// Ascending sort
+await users.find({}).sort({ name: 1 }).toArray();
+
+// Descending sort
+await users.find({}).sort({ createdAt: -1 }).toArray();
+
+// Multiple fields
+await users.find({})
+  .sort({ role: 1, name: 1 })
+  .toArray();
+
+// String values also work
+await users.find({})
+  .sort({ name: "asc", age: "desc" })
+  .toArray();
+```
+
+| Value | Direction |
+| ----- | --------- |
+| `1`, `"asc"`, `"ascending"` | Ascending |
+| `-1`, `"desc"`, `"descending"` | Descending |
+
+## Update Types
+
+The `Update<Doc>` type provides type-safe update operations.
+
+### $set
+
+Set field values:
+
+```ts
+await users.updateOne(
+  { _id: userId },
+  { $set: { name: "Jane", age: 25 } }
+);
+
+// Nested fields
+await users.updateOne(
+  { _id: userId },
+  { $set: { "address.city": "Boston" } }
+);
+```
+
+### $unset
+
+Remove fields from a document:
+
+```ts
+await users.updateOne(
+  { _id: userId },
+  { $unset: { nickname: 1 } }
+);
+```
+
+### $inc
+
+Increment numeric fields:
+
+```ts
+await posts.updateOne(
+  { _id: postId },
+  { $inc: { views: 1 } }
+);
+
+// Decrement with negative value
+await users.updateOne(
+  { _id: userId },
+  { $inc: { credits: -10 } }
+);
+```
+
+### $mul
+
+Multiply numeric fields:
+
+```ts
+await products.updateOne(
+  { _id: productId },
+  { $mul: { price: 1.1 } } // 10% increase
+);
+```
+
+### $min / $max
+
+Update only if new value is less than / greater than current:
+
+```ts
+// Update only if new score is higher
+await users.updateOne(
+  { _id: userId },
+  { $max: { highScore: 1000 } }
+);
+
+// Update only if new date is earlier
+await users.updateOne(
+  { _id: userId },
+  { $min: { firstLogin: new Date() } }
+);
+```
+
+### $rename
+
+Rename a field:
+
+```ts
+await users.updateMany(
+  {},
+  { $rename: { nickname: "displayName" } }
+);
+```
+
+### $currentDate
+
+Set a field to the current date:
+
+```ts
+await users.updateOne(
+  { _id: userId },
+  { $currentDate: { lastModified: true } }
+);
+
+// As timestamp
+await users.updateOne(
+  { _id: userId },
+  { $currentDate: { lastModified: { $type: "timestamp" } } }
+);
+```
+
+## Array Update Operators
+
+Special operators for updating array fields.
+
+### $push
+
+Add elements to an array:
+
+```ts
+// Add single element
+await posts.updateOne(
+  { _id: postId },
+  { $push: { tags: "new-tag" } }
+);
+
+// Add multiple elements with modifiers
+await posts.updateOne(
+  { _id: postId },
+  {
+    $push: {
+      comments: {
+        $each: [
+          { author: "alice", text: "Great post!" },
+          { author: "bob", text: "Thanks!" },
+        ],
+        $position: 0, // Add at beginning
+        $slice: 10,   // Keep only first 10
+      },
+    },
+  }
+);
+```
+
+### $addToSet
+
+Add elements only if they don't already exist:
+
+```ts
+await posts.updateOne(
+  { _id: postId },
+  { $addToSet: { tags: "unique-tag" } }
+);
+
+// Multiple elements
+await posts.updateOne(
+  { _id: postId },
+  {
+    $addToSet: {
+      tags: { $each: ["tag1", "tag2", "tag3"] },
+    },
+  }
+);
+```
+
+### $pop
+
+Remove the first or last element:
+
+```ts
+// Remove last element
+await posts.updateOne(
+  { _id: postId },
+  { $pop: { tags: 1 } }
+);
+
+// Remove first element
+await posts.updateOne(
+  { _id: postId },
+  { $pop: { tags: -1 } }
+);
+```
+
+### $pull
+
+Remove elements matching a condition:
+
+```ts
+// Remove specific value
+await posts.updateOne(
+  { _id: postId },
+  { $pull: { tags: "deprecated" } }
+);
+
+// Remove objects matching condition
+await posts.updateOne(
+  { _id: postId },
+  { $pull: { comments: { author: "spammer" } } }
+);
+```
+
+### $pullAll
+
+Remove all matching values:
+
+```ts
+await posts.updateOne(
+  { _id: postId },
+  { $pullAll: { tags: ["old", "deprecated", "obsolete"] } }
+);
+```
+
+## Combining Update Operators
+
+You can use multiple update operators in a single update:
+
+```ts
+await posts.updateOne(
+  { _id: postId },
+  {
+    $set: { title: "Updated Title" },
+    $inc: { views: 1 },
+    $push: { tags: "edited" },
+    $currentDate: { updatedAt: true },
+  }
+);
+```
+
+## Type Safety Examples
+
+momos ensures type safety across all query operations:
+
+```ts
+const userSchema = z.object({
+  name: z.string(),
+  age: z.number(),
+  email: z.string(),
+  tags: z.array(z.string()),
+});
+
+const users = defineCollection(db, "users", userSchema);
+
+// ✅ Valid - age is a number
+await users.find({ age: { $gt: 18 } });
+
+// ❌ TypeScript error - can't use $gt on string
+await users.find({ name: { $gt: 18 } });
+
+// ✅ Valid - $inc on numeric field
+await users.updateOne({}, { $inc: { age: 1 } });
+
+// ❌ TypeScript error - can't $inc a string field
+await users.updateOne({}, { $inc: { name: 1 } });
+
+// ✅ Valid - $push on array field
+await users.updateOne({}, { $push: { tags: "new" } });
+
+// ❌ TypeScript error - can't $push to non-array
+await users.updateOne({}, { $push: { name: "value" } });
+```
+

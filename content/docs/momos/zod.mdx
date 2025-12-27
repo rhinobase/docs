@@ -1,0 +1,360 @@
+---
+title: Zod
+description: Using momos with Zod validation
+---
+
+## Installation
+
+Install momos with Zod:
+
+```package-install
+momos mongodb zod
+```
+
+## Basic Setup
+
+```ts
+import { MongoClient } from "mongodb";
+import { defineCollection } from "momos";
+import { z } from "zod";
+
+const client = new MongoClient("mongodb://localhost:27017");
+await client.connect();
+const db = client.db("myapp");
+```
+
+## Defining Schemas
+
+### Simple Schema
+
+```ts
+const userSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Invalid email address"),
+  age: z.number().int().min(0, "Age must be positive"),
+});
+
+const users = defineCollection(db, "users", userSchema);
+```
+
+### Schema with Defaults
+
+```ts
+const postSchema = z.object({
+  title: z.string(),
+  content: z.string(),
+  slug: z.string().regex(/^[a-z0-9-]+$/),
+  views: z.number().default(0),
+  likes: z.number().default(0),
+  published: z.boolean().default(false),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+});
+
+const posts = defineCollection(db, "posts", postSchema);
+
+// Insert with minimal data - defaults are applied
+await posts.insertOne({
+  title: "Hello World",
+  content: "My first post",
+  slug: "hello-world",
+});
+```
+
+### Nested Objects
+
+```ts
+const addressSchema = z.object({
+  street: z.string(),
+  city: z.string(),
+  state: z.string().length(2),
+  zip: z.string().regex(/^\d{5}(-\d{4})?$/),
+  country: z.string().default("USA"),
+});
+
+const companySchema = z.object({
+  name: z.string(),
+  industry: z.string(),
+  headquarters: addressSchema,
+  offices: z.array(addressSchema).default([]),
+});
+
+const companies = defineCollection(db, "companies", companySchema);
+```
+
+### Arrays and Tuples
+
+```ts
+const productSchema = z.object({
+  name: z.string(),
+  tags: z.array(z.string()).min(1, "At least one tag required"),
+  dimensions: z.tuple([z.number(), z.number(), z.number()]), // [width, height, depth]
+  variants: z.array(z.object({
+    sku: z.string(),
+    color: z.string(),
+    size: z.enum(["S", "M", "L", "XL"]),
+    price: z.number().positive(),
+  })),
+});
+
+const products = defineCollection(db, "products", productSchema);
+```
+
+### Enums
+
+```ts
+const orderSchema = z.object({
+  orderNumber: z.string(),
+  status: z.enum(["pending", "processing", "shipped", "delivered", "cancelled"]),
+  priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"),
+});
+
+const orders = defineCollection(db, "orders", orderSchema);
+
+// Type-safe status updates
+await orders.updateOne(
+  { orderNumber: "ORD-001" },
+  { $set: { status: "shipped" } } // Only valid enum values allowed
+);
+```
+
+### Optional and Nullable
+
+```ts
+const profileSchema = z.object({
+  username: z.string(),
+  bio: z.string().optional(), // Can be undefined
+  avatar: z.string().url().nullable(), // Can be null
+  website: z.string().url().nullish(), // Can be null or undefined
+});
+
+const profiles = defineCollection(db, "profiles", profileSchema);
+```
+
+### Unions and Discriminated Unions
+
+```ts
+// Simple union
+const idSchema = z.union([z.string(), z.number()]);
+
+// Discriminated union for polymorphic documents
+const notificationSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("email"),
+    to: z.string().email(),
+    subject: z.string(),
+    body: z.string(),
+  }),
+  z.object({
+    type: z.literal("sms"),
+    phone: z.string(),
+    message: z.string().max(160),
+  }),
+  z.object({
+    type: z.literal("push"),
+    deviceToken: z.string(),
+    title: z.string(),
+    body: z.string(),
+  }),
+]);
+
+const notifications = defineCollection(db, "notifications", notificationSchema);
+
+// Type-safe inserts for each variant
+await notifications.insertOne({
+  type: "email",
+  to: "user@example.com",
+  subject: "Welcome!",
+  body: "Thanks for signing up.",
+});
+
+await notifications.insertOne({
+  type: "sms",
+  phone: "+1234567890",
+  message: "Your code is 123456",
+});
+```
+
+### Transformations
+
+```ts
+const userSchema = z.object({
+  email: z.string().email().toLowerCase(), // Normalize to lowercase
+  name: z.string().trim(), // Remove whitespace
+  username: z.string()
+    .min(3)
+    .max(20)
+    .toLowerCase()
+    .regex(/^[a-z0-9_]+$/),
+});
+
+const users = defineCollection(db, "users", userSchema);
+
+// Data is transformed before insertion
+await users.insertOne({
+  email: "JOHN@EXAMPLE.COM", // Stored as "john@example.com"
+  name: "  John Doe  ",     // Stored as "John Doe"
+  username: "JohnDoe123",   // Stored as "johndoe123"
+});
+```
+
+### Custom Validation
+
+```ts
+const userSchema = z.object({
+  username: z.string(),
+  password: z.string()
+    .min(8, "Password must be at least 8 characters")
+    .regex(/[A-Z]/, "Password must contain uppercase")
+    .regex(/[a-z]/, "Password must contain lowercase")
+    .regex(/[0-9]/, "Password must contain a number"),
+  confirmPassword: z.string(),
+}).refine(
+  (data) => data.password === data.confirmPassword,
+  {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+  }
+);
+```
+
+### Custom ObjectId Validation
+
+```ts
+import { ObjectId } from "mongodb";
+
+const objectIdSchema = z.custom<ObjectId>(
+  (val) => val instanceof ObjectId || ObjectId.isValid(val as string),
+  { message: "Invalid ObjectId" }
+).transform((val) => 
+  val instanceof ObjectId ? val : new ObjectId(val as string)
+);
+
+const commentSchema = z.object({
+  postId: objectIdSchema,
+  authorId: objectIdSchema,
+  content: z.string(),
+  createdAt: z.date().default(() => new Date()),
+});
+
+const comments = defineCollection(db, "comments", commentSchema);
+```
+
+## Complete Example
+
+```ts
+import { MongoClient, ObjectId } from "mongodb";
+import { defineCollection, ValidationError } from "momos";
+import { z } from "zod";
+
+// Connect to MongoDB
+const client = new MongoClient("mongodb://localhost:27017");
+await client.connect();
+const db = client.db("blog");
+
+// Define schemas
+const authorSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+  bio: z.string().optional(),
+});
+
+const postSchema = z.object({
+  title: z.string().min(1).max(200),
+  slug: z.string().regex(/^[a-z0-9-]+$/),
+  content: z.string(),
+  excerpt: z.string().max(500).optional(),
+  author: authorSchema,
+  tags: z.array(z.string()).default([]),
+  status: z.enum(["draft", "published", "archived"]).default("draft"),
+  views: z.number().int().min(0).default(0),
+  createdAt: z.date().default(() => new Date()),
+  updatedAt: z.date().default(() => new Date()),
+});
+
+// Create typed collection
+const posts = defineCollection(db, "posts", postSchema);
+
+// Create indexes
+await posts.createIndex({ slug: 1 }, { unique: true });
+await posts.createIndex({ "author.email": 1 });
+await posts.createIndex({ tags: 1 });
+await posts.createIndex({ status: 1, createdAt: -1 });
+
+// Insert a post
+try {
+  await posts.insertOne({
+    title: "Getting Started with momos",
+    slug: "getting-started-with-momos",
+    content: "momos is a type-safe MongoDB wrapper...",
+    author: {
+      name: "John Doe",
+      email: "john@example.com",
+    },
+    tags: ["mongodb", "typescript", "tutorial"],
+  });
+} catch (error) {
+  if (error instanceof ValidationError) {
+    console.error("Validation failed:", error.issues);
+  }
+  throw error;
+}
+
+// Query posts
+const publishedPosts = await posts
+  .find({ status: "published" })
+  .sort({ createdAt: -1 })
+  .limit(10)
+  .toArray();
+
+// Update with type safety
+await posts.updateOne(
+  { slug: "getting-started-with-momos" },
+  {
+    $set: { status: "published" },
+    $inc: { views: 1 },
+    $currentDate: { updatedAt: true },
+  }
+);
+
+// Aggregation
+type TagStats = { _id: string; count: number };
+
+const popularTags = await posts
+  .aggregate<TagStats>([
+    { $match: { status: "published" } },
+    { $unwind: "$tags" },
+    { $group: { _id: "$tags", count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: 10 },
+  ])
+  .toArray();
+
+console.log("Popular tags:", popularTags);
+```
+
+## Error Handling
+
+```ts
+import { ValidationError } from "momos";
+
+try {
+  await users.insertOne({
+    name: "", // Too short
+    email: "not-an-email", // Invalid format
+    age: -5, // Negative
+  });
+} catch (error) {
+  if (error instanceof ValidationError) {
+    // Access individual issues
+    error.issues.forEach((issue) => {
+      console.log(`${issue.path?.join(".")}: ${issue.message}`);
+    });
+    // Output:
+    // name: Name is required
+    // email: Invalid email address
+    // age: Age must be positive
+  }
+}
+```
+

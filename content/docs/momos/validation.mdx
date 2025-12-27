@@ -1,0 +1,317 @@
+---
+title: Schema Validation
+description: Document validation with Standard Schema
+---
+
+## Overview
+
+momos uses [Standard Schema](https://standardschema.dev/) for document validation, which means it works with any compatible validation library including Zod, Valibot, ArkType, and more.
+
+## How Validation Works
+
+When validation is enabled (the default), momos validates documents before:
+
+- `insertOne` - Validates the document before inserting
+- `insertMany` - Validates all documents before inserting
+- `replaceOne` - Validates the replacement document
+- `findOneAndReplace` - Validates the replacement document
+
+<Callout title="Note">
+Update operations (`updateOne`, `updateMany`, `findOneAndUpdate`) do **not** validate because they use update operators like `$set` and `$inc` rather than full documents.
+</Callout>
+
+## Validation Functions
+
+momos exports utility functions for manual validation.
+
+### validate
+
+Validate a single value against a schema. Throws `ValidationError` if invalid.
+
+```ts
+import { validate } from "momos";
+import { z } from "zod";
+
+const userSchema = z.object({
+  name: z.string(),
+  email: z.string().email(),
+});
+
+// Valid data
+const user = await validate(userSchema, {
+  name: "John",
+  email: "john@example.com",
+});
+// user: { name: string, email: string }
+
+// Invalid data throws ValidationError
+try {
+  await validate(userSchema, {
+    name: "John",
+    email: "not-an-email",
+  });
+} catch (error) {
+  if (error instanceof ValidationError) {
+    console.log(error.issues);
+    // [{ message: "Invalid email", path: ["email"] }]
+  }
+}
+```
+
+### validateMany
+
+Validate multiple values at once:
+
+```ts
+import { validateMany } from "momos";
+
+const users = await validateMany(userSchema, [
+  { name: "John", email: "john@example.com" },
+  { name: "Jane", email: "jane@example.com" },
+]);
+// users: Array<{ name: string, email: string }>
+```
+
+### isValid
+
+Check if a value is valid without throwing:
+
+```ts
+import { isValid } from "momos";
+
+const valid = await isValid(userSchema, {
+  name: "John",
+  email: "john@example.com",
+});
+// valid: true
+
+const invalid = await isValid(userSchema, {
+  name: "John",
+  email: "not-an-email",
+});
+// invalid: false
+```
+
+## ValidationError
+
+When validation fails, a `ValidationError` is thrown with details about the issues:
+
+```ts
+import { ValidationError } from "momos";
+
+try {
+  await users.insertOne({
+    name: "",
+    email: "invalid",
+    age: -5,
+  });
+} catch (error) {
+  if (error instanceof ValidationError) {
+    console.log(error.message);
+    // "Validation failed: String must not be empty, Invalid email, Number must be >= 0"
+    
+    console.log(error.issues);
+    // [
+    //   { message: "String must not be empty", path: ["name"] },
+    //   { message: "Invalid email", path: ["email"] },
+    //   { message: "Number must be >= 0", path: ["age"] }
+    // ]
+  }
+}
+```
+
+## Disabling Validation
+
+For performance-critical operations or when you're confident the data is already valid:
+
+```ts
+// Disable for entire collection
+const users = defineCollection(db, "users", userSchema, {
+  validate: false,
+});
+
+// Now insertOne won't validate
+await users.insertOne({
+  name: "John",
+  email: "john@example.com",
+});
+```
+
+<Callout title="Warning">
+Disabling validation removes runtime safety checks. Invalid data may be inserted into your database.
+</Callout>
+
+## Schema Design Best Practices
+
+### Use Default Values
+
+Define default values in your schema for optional fields:
+
+```ts
+const postSchema = z.object({
+  title: z.string(),
+  content: z.string(),
+  views: z.number().default(0),
+  published: z.boolean().default(false),
+  createdAt: z.date().default(() => new Date()),
+});
+
+// Insert with minimal data
+await posts.insertOne({
+  title: "My Post",
+  content: "Hello world",
+});
+// Document will have views: 0, published: false, createdAt: now
+```
+
+### Transform Data
+
+Use schema transformations for data normalization:
+
+```ts
+const userSchema = z.object({
+  email: z.string().email().toLowerCase(), // Normalize to lowercase
+  name: z.string().trim(), // Remove whitespace
+  tags: z.array(z.string()).default([]),
+});
+```
+
+### Custom \_id Types
+
+By default, momos adds `_id: ObjectId` to your documents. You can define custom `_id` types:
+
+```ts
+// String ID
+const productSchema = z.object({
+  _id: z.string(), // SKU as ID
+  name: z.string(),
+  price: z.number(),
+});
+
+// UUID
+const eventSchema = z.object({
+  _id: z.string().uuid(),
+  type: z.string(),
+  timestamp: z.date(),
+});
+
+// Compound key as object (advanced)
+const logSchema = z.object({
+  _id: z.object({
+    date: z.string(),
+    sequence: z.number(),
+  }),
+  message: z.string(),
+});
+```
+
+### Nested Objects
+
+Define complex nested structures:
+
+```ts
+const addressSchema = z.object({
+  street: z.string(),
+  city: z.string(),
+  country: z.string(),
+  zip: z.string(),
+});
+
+const userSchema = z.object({
+  name: z.string(),
+  email: z.string().email(),
+  addresses: z.array(addressSchema),
+  primaryAddress: addressSchema.optional(),
+});
+```
+
+### Discriminated Unions
+
+Use discriminated unions for polymorphic documents:
+
+```ts
+const contentSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("text"),
+    body: z.string(),
+  }),
+  z.object({
+    type: z.literal("image"),
+    url: z.string().url(),
+    alt: z.string(),
+  }),
+  z.object({
+    type: z.literal("video"),
+    url: z.string().url(),
+    duration: z.number(),
+  }),
+]);
+
+const posts = defineCollection(db, "posts", contentSchema);
+
+// Type-safe inserts
+await posts.insertOne({ type: "text", body: "Hello!" });
+await posts.insertOne({ type: "image", url: "https://...", alt: "Photo" });
+```
+
+## Working with Dates
+
+MongoDB stores dates as BSON Date type. Use date schemas appropriately:
+
+```ts
+const eventSchema = z.object({
+  name: z.string(),
+  startDate: z.date(),
+  endDate: z.date(),
+});
+
+// Insert with Date objects
+await events.insertOne({
+  name: "Conference",
+  startDate: new Date("2024-06-01"),
+  endDate: new Date("2024-06-03"),
+});
+
+// Query with dates
+await events.find({
+  startDate: { $gte: new Date() },
+}).toArray();
+```
+
+## Handling ObjectId
+
+When working with MongoDB ObjectIds:
+
+```ts
+import { ObjectId } from "mongodb";
+import { z } from "zod";
+
+// If your schema doesn't define _id, momos adds ObjectId automatically
+const userSchema = z.object({
+  name: z.string(),
+});
+
+const users = defineCollection(db, "users", userSchema);
+
+// Query by ObjectId
+const user = await users.findById(new ObjectId("..."));
+
+// Or by string (converted internally)
+const user2 = await users.findById("507f1f77bcf86cd799439011");
+```
+
+For schemas that need ObjectId references:
+
+```ts
+// Custom ObjectId validation (if needed)
+const objectIdSchema = z.custom<ObjectId>(
+  (val) => val instanceof ObjectId,
+  { message: "Invalid ObjectId" }
+);
+
+const postSchema = z.object({
+  title: z.string(),
+  authorId: objectIdSchema,
+});
+```
+
