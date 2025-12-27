@@ -1,0 +1,417 @@
+---
+title: Collection Operations
+description: CRUD operations with TypedCollection
+---
+
+## Overview
+
+The `TypedCollection` class wraps MongoDB's native `Collection` with type-safe methods. All operations are fully typed based on your schema definition.
+
+## Creating a Collection
+
+Use `defineCollection` to create a typed collection:
+
+```ts
+import { defineCollection } from "momos";
+import { z } from "zod";
+
+const postSchema = z.object({
+  title: z.string(),
+  content: z.string(),
+  author: z.string(),
+  tags: z.array(z.string()),
+  views: z.number().default(0),
+  published: z.boolean().default(false),
+  createdAt: z.date().default(() => new Date()),
+});
+
+const posts = defineCollection(db, "posts", postSchema);
+```
+
+## Insert Operations
+
+### insertOne
+
+Insert a single document. The document is validated before insertion.
+
+```ts
+const result = await posts.insertOne({
+  title: "Hello World",
+  content: "This is my first post",
+  author: "john",
+  tags: ["intro", "hello"],
+});
+
+console.log(result.insertedId); // ObjectId
+```
+
+The `_id` field is optional - MongoDB will generate one if not provided:
+
+```ts
+// Providing a custom _id
+await posts.insertOne({
+  _id: new ObjectId("507f1f77bcf86cd799439011"),
+  title: "With Custom ID",
+  content: "...",
+  author: "john",
+  tags: [],
+});
+```
+
+### insertMany
+
+Insert multiple documents at once. All documents are validated before insertion.
+
+```ts
+const result = await posts.insertMany([
+  {
+    title: "Post 1",
+    content: "Content 1",
+    author: "alice",
+    tags: ["tag1"],
+  },
+  {
+    title: "Post 2",
+    content: "Content 2",
+    author: "bob",
+    tags: ["tag2"],
+  },
+]);
+
+console.log(result.insertedCount); // 2
+console.log(result.insertedIds); // { 0: ObjectId, 1: ObjectId }
+```
+
+## Find Operations
+
+### find
+
+Find documents matching a filter. Returns a typed cursor for chaining operations.
+
+```ts
+// Find all published posts
+const cursor = posts.find({ published: true });
+const publishedPosts = await cursor.toArray();
+
+// Chain cursor methods
+const recentPosts = await posts
+  .find({ author: "john" })
+  .sort({ createdAt: -1 })
+  .limit(10)
+  .toArray();
+
+// Use filters with operators
+const popularPosts = await posts
+  .find({
+    views: { $gte: 1000 },
+    tags: { $in: ["popular", "trending"] },
+  })
+  .toArray();
+```
+
+### findOne
+
+Find a single document matching the filter.
+
+```ts
+const post = await posts.findOne({ title: "Hello World" });
+
+if (post) {
+  console.log(post.title); // Type-safe access
+  console.log(post._id); // ObjectId is always present
+}
+```
+
+### findById
+
+Convenience method to find a document by its `_id`.
+
+```ts
+import { ObjectId } from "mongodb";
+
+const post = await posts.findById(new ObjectId("507f1f77bcf86cd799439011"));
+
+// Also accepts string IDs
+const post2 = await posts.findById("507f1f77bcf86cd799439011");
+```
+
+## Update Operations
+
+### updateOne
+
+Update a single document matching the filter.
+
+```ts
+const result = await posts.updateOne(
+  { title: "Hello World" },
+  { $set: { views: 100 } }
+);
+
+console.log(result.matchedCount); // 1
+console.log(result.modifiedCount); // 1
+```
+
+### updateMany
+
+Update all documents matching the filter.
+
+```ts
+const result = await posts.updateMany(
+  { author: "john" },
+  { $set: { published: true } }
+);
+
+console.log(result.modifiedCount);
+```
+
+### replaceOne
+
+Replace an entire document. The replacement is validated before saving.
+
+```ts
+const result = await posts.replaceOne(
+  { _id: postId },
+  {
+    title: "Updated Title",
+    content: "Completely new content",
+    author: "john",
+    tags: ["updated"],
+    views: 0,
+    published: false,
+    createdAt: new Date(),
+  }
+);
+```
+
+### findOneAndUpdate
+
+Find a document and update it atomically. Returns the document (before or after update).
+
+```ts
+// Return the updated document
+const updated = await posts.findOneAndUpdate(
+  { title: "Hello World" },
+  { $inc: { views: 1 } },
+  { returnDocument: "after" }
+);
+
+if (updated) {
+  console.log(updated.views); // Incremented value
+}
+```
+
+### findOneAndReplace
+
+Find a document and replace it atomically. The replacement is validated.
+
+```ts
+const replaced = await posts.findOneAndReplace(
+  { title: "Old Title" },
+  {
+    title: "New Title",
+    content: "New content",
+    author: "john",
+    tags: [],
+    views: 0,
+    published: true,
+    createdAt: new Date(),
+  },
+  { returnDocument: "after" }
+);
+```
+
+## Delete Operations
+
+### deleteOne
+
+Delete a single document matching the filter.
+
+```ts
+const result = await posts.deleteOne({ title: "Hello World" });
+
+console.log(result.deletedCount); // 1 or 0
+```
+
+### deleteMany
+
+Delete all documents matching the filter.
+
+```ts
+const result = await posts.deleteMany({ published: false });
+
+console.log(result.deletedCount);
+```
+
+### findOneAndDelete
+
+Find a document and delete it atomically. Returns the deleted document.
+
+```ts
+const deleted = await posts.findOneAndDelete({ title: "To Delete" });
+
+if (deleted) {
+  console.log("Deleted:", deleted.title);
+}
+```
+
+## Count Operations
+
+### countDocuments
+
+Count documents matching the filter.
+
+```ts
+const count = await posts.countDocuments({ published: true });
+console.log(`${count} published posts`);
+
+// With options
+const recentCount = await posts.countDocuments(
+  { createdAt: { $gte: lastWeek } },
+  { limit: 1000 } // Stop counting after 1000
+);
+```
+
+### estimatedDocumentCount
+
+Get an estimated count using collection metadata. Faster than `countDocuments` but less accurate.
+
+```ts
+const estimate = await posts.estimatedDocumentCount();
+console.log(`Approximately ${estimate} posts`);
+```
+
+### exists
+
+Check if any document matches the filter.
+
+```ts
+const hasPublished = await posts.exists({ published: true });
+
+if (hasPublished) {
+  console.log("At least one published post exists");
+}
+```
+
+## Aggregation
+
+Run aggregation pipelines with typed results.
+
+```ts
+// Count posts by author
+const authorStats = await posts
+  .aggregate<{ _id: string; count: number }>([
+    { $group: { _id: "$author", count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+  ])
+  .toArray();
+
+// Type-safe results
+authorStats.forEach((stat) => {
+  console.log(`${stat._id}: ${stat.count} posts`);
+});
+```
+
+## Index Operations
+
+### createIndex
+
+Create an index on the collection.
+
+```ts
+await posts.createIndex({ author: 1 });
+
+// Compound index
+await posts.createIndex({ author: 1, createdAt: -1 });
+
+// With options
+await posts.createIndex(
+  { email: 1 },
+  { unique: true }
+);
+
+// Text index
+await posts.createIndex({ title: "text", content: "text" });
+```
+
+### createIndexes
+
+Create multiple indexes at once.
+
+```ts
+await posts.createIndexes([
+  { key: { author: 1 } },
+  { key: { tags: 1 } },
+  { key: { createdAt: -1 } },
+]);
+```
+
+### dropIndex
+
+Drop an index by name.
+
+```ts
+await posts.dropIndex("author_1");
+```
+
+### indexes
+
+List all indexes on the collection.
+
+```ts
+const indexes = await posts.indexes();
+
+indexes.forEach((index) => {
+  console.log(index.name, index.key);
+});
+```
+
+## Utility Operations
+
+### distinct
+
+Get distinct values for a field.
+
+```ts
+const authors = await posts.distinct("author");
+// authors: string[]
+
+const tags = await posts.distinct("tags", { published: true });
+// tags: string[]
+```
+
+### drop
+
+Drop the entire collection.
+
+```ts
+await posts.drop();
+```
+
+<Callout title="Warning">
+This permanently deletes all documents in the collection. Use with caution!
+</Callout>
+
+## Collection Properties
+
+### collectionName
+
+Get the name of the collection.
+
+```ts
+console.log(posts.collectionName); // "posts"
+```
+
+### raw
+
+Access the underlying MongoDB collection for operations not covered by the wrapper.
+
+```ts
+const rawCollection = posts.raw;
+
+// Use native methods
+await rawCollection.bulkWrite([
+  { insertOne: { document: { ... } } },
+  { updateOne: { filter: { ... }, update: { ... } } },
+]);
+```
+

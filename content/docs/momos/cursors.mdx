@@ -1,0 +1,383 @@
+---
+title: Cursor Operations
+description: Working with TypedFindCursor and TypedAggregationCursor
+---
+
+## Overview
+
+momos provides typed cursor wrappers around MongoDB's native cursors. These cursors maintain type safety while providing a familiar API for working with query results.
+
+## TypedFindCursor
+
+The `TypedFindCursor` is returned from `find()` operations and provides chainable methods for filtering, sorting, and transforming results.
+
+### Basic Usage
+
+```ts
+import { defineCollection } from "momos";
+import { z } from "zod";
+
+const userSchema = z.object({
+  name: z.string(),
+  email: z.string(),
+  age: z.number(),
+  role: z.enum(["user", "admin"]),
+});
+
+const users = defineCollection(db, "users", userSchema);
+
+// Get a cursor
+const cursor = users.find({ role: "admin" });
+
+// Chain operations
+const results = await cursor
+  .sort({ name: 1 })
+  .skip(10)
+  .limit(5)
+  .toArray();
+```
+
+### Cursor Methods
+
+#### toArray
+
+Convert the cursor to an array of documents:
+
+```ts
+const allUsers = await users.find({}).toArray();
+// allUsers: Array<{ _id: ObjectId, name: string, email: string, ... }>
+```
+
+#### forEach
+
+Iterate over documents with a callback:
+
+```ts
+await users.find({}).forEach((user) => {
+  console.log(user.name);
+});
+
+// Async callback
+await users.find({}).forEach(async (user) => {
+  await sendEmail(user.email);
+});
+```
+
+#### map
+
+Transform documents to a new type:
+
+```ts
+const names = await users
+  .find({})
+  .map((user) => user.name)
+  .toArray();
+// names: string[]
+
+// Complex transformation
+const userDTOs = await users
+  .find({})
+  .map((user) => ({
+    id: user._id.toString(),
+    displayName: user.name,
+    isAdmin: user.role === "admin",
+  }))
+  .toArray();
+```
+
+#### limit
+
+Limit the number of results:
+
+```ts
+const topTen = await users
+  .find({})
+  .sort({ score: -1 })
+  .limit(10)
+  .toArray();
+```
+
+#### skip
+
+Skip a number of documents (useful for pagination):
+
+```ts
+const page = 3;
+const pageSize = 20;
+
+const pageResults = await users
+  .find({})
+  .skip((page - 1) * pageSize)
+  .limit(pageSize)
+  .toArray();
+```
+
+#### sort
+
+Sort the results:
+
+```ts
+// Ascending
+const sortedAsc = await users.find({}).sort({ name: 1 }).toArray();
+
+// Descending
+const sortedDesc = await users.find({}).sort({ createdAt: -1 }).toArray();
+
+// Multiple fields
+const multiSort = await users
+  .find({})
+  .sort({ role: 1, name: 1 })
+  .toArray();
+```
+
+#### project
+
+Select specific fields to return:
+
+```ts
+const projected = await users
+  .find({})
+  .project({ name: 1, email: 1 })
+  .toArray();
+// Results contain _id, name, and email only
+```
+
+#### batchSize
+
+Set the batch size for cursor iteration:
+
+```ts
+const cursor = users.find({}).batchSize(100);
+
+for await (const user of cursor) {
+  // Process in batches of 100
+}
+```
+
+#### hasNext / next
+
+Manually iterate through results:
+
+```ts
+const cursor = users.find({});
+
+while (await cursor.hasNext()) {
+  const user = await cursor.next();
+  if (user) {
+    console.log(user.name);
+  }
+}
+```
+
+#### close
+
+Close the cursor to free resources:
+
+```ts
+const cursor = users.find({});
+
+try {
+  // Use cursor...
+} finally {
+  await cursor.close();
+}
+```
+
+### Async Iteration
+
+Cursors support `for await...of` syntax:
+
+```ts
+const cursor = users.find({});
+
+for await (const user of cursor) {
+  console.log(user.name);
+  
+  // Early exit if needed
+  if (user.role === "admin") {
+    break;
+  }
+}
+```
+
+### Chaining Example
+
+Combine multiple cursor operations:
+
+```ts
+const activeAdmins = await users
+  .find({
+    role: "admin",
+    lastActive: { $gte: lastMonth },
+  })
+  .sort({ lastActive: -1 })
+  .skip(0)
+  .limit(10)
+  .project({ name: 1, email: 1, lastActive: 1 })
+  .toArray();
+```
+
+## TypedAggregationCursor
+
+The `TypedAggregationCursor` is returned from `aggregate()` operations.
+
+### Basic Usage
+
+```ts
+// Define the expected output type
+type AuthorStats = {
+  _id: string;
+  postCount: number;
+  totalViews: number;
+};
+
+const stats = await posts
+  .aggregate<AuthorStats>([
+    { $group: {
+      _id: "$author",
+      postCount: { $sum: 1 },
+      totalViews: { $sum: "$views" },
+    }},
+    { $sort: { postCount: -1 } },
+  ])
+  .toArray();
+
+// stats is AuthorStats[]
+stats.forEach((s) => {
+  console.log(`${s._id}: ${s.postCount} posts, ${s.totalViews} views`);
+});
+```
+
+### Aggregation Cursor Methods
+
+The aggregation cursor supports the same iteration methods as the find cursor:
+
+```ts
+// toArray
+const results = await posts.aggregate<Stats>(pipeline).toArray();
+
+// forEach
+await posts.aggregate<Stats>(pipeline).forEach((doc) => {
+  console.log(doc);
+});
+
+// map
+const mapped = await posts
+  .aggregate<Stats>(pipeline)
+  .map((doc) => doc._id)
+  .toArray();
+
+// Async iteration
+for await (const doc of posts.aggregate<Stats>(pipeline)) {
+  console.log(doc);
+}
+```
+
+## Accessing Raw Cursors
+
+If you need access to the underlying MongoDB cursor:
+
+```ts
+const typedCursor = users.find({});
+const rawCursor = typedCursor.raw;
+
+// Use native cursor methods
+const explained = await rawCursor.explain();
+```
+
+## Pagination Pattern
+
+Here's a common pagination pattern using cursors:
+
+```ts
+interface PaginationOptions {
+  page: number;
+  limit: number;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+}
+
+async function paginateUsers(
+  filter: Filter<typeof userSchema>,
+  options: PaginationOptions
+) {
+  const { page, limit, sortBy = "createdAt", sortOrder = "desc" } = options;
+  
+  const skip = (page - 1) * limit;
+  const sort = { [sortBy]: sortOrder === "asc" ? 1 : -1 } as Sort<typeof userSchema>;
+  
+  const [data, total] = await Promise.all([
+    users.find(filter).sort(sort).skip(skip).limit(limit).toArray(),
+    users.countDocuments(filter),
+  ]);
+  
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNext: page * limit < total,
+      hasPrev: page > 1,
+    },
+  };
+}
+
+// Usage
+const result = await paginateUsers(
+  { role: "user" },
+  { page: 1, limit: 20 }
+);
+```
+
+## Cursor-based Pagination
+
+For large datasets, cursor-based pagination is more efficient:
+
+```ts
+async function cursorPaginate(
+  lastId: ObjectId | null,
+  limit: number
+) {
+  const filter = lastId 
+    ? { _id: { $gt: lastId } } 
+    : {};
+  
+  const results = await users
+    .find(filter)
+    .sort({ _id: 1 })
+    .limit(limit + 1) // Fetch one extra to check for next page
+    .toArray();
+  
+  const hasNext = results.length > limit;
+  const data = hasNext ? results.slice(0, -1) : results;
+  const nextCursor = hasNext ? data[data.length - 1]._id : null;
+  
+  return { data, nextCursor, hasNext };
+}
+```
+
+## Stream Processing
+
+For memory-efficient processing of large result sets:
+
+```ts
+async function processLargeDataset() {
+  const cursor = users.find({}).batchSize(1000);
+  
+  let processed = 0;
+  
+  for await (const user of cursor) {
+    await processUser(user);
+    processed++;
+    
+    if (processed % 1000 === 0) {
+      console.log(`Processed ${processed} users`);
+    }
+  }
+  
+  console.log(`Done! Processed ${processed} total users`);
+}
+```
+

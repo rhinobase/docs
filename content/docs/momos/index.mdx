@@ -1,0 +1,155 @@
+---
+title: Quick Start
+description: Getting started with momos - Type-safe MongoDB collections
+icon: Album
+---
+
+## Introduction
+
+[momos](https://npmjs.com/package/momos) is a type-safe MongoDB collection wrapper that validates documents using [Standard Schema](https://standardschema.dev/). It provides full TypeScript support for your MongoDB operations while ensuring data integrity through schema validation.
+
+### Key Features
+
+- **Type-safe CRUD operations** - Full TypeScript inference for insert, find, update, and delete
+- **Schema validation** - Automatic validation using any Standard Schema compatible library (Zod, Valibot, ArkType, etc.)
+- **Typed queries** - Type-safe filters, projections, updates, and aggregations
+- **Typed cursors** - Chainable, type-safe cursor operations
+- **Zero runtime overhead** - Minimal wrapper around native MongoDB driver
+
+## Installation
+
+Install `momos` along with MongoDB driver and your preferred validation library.
+
+```package-install
+momos mongodb
+```
+
+You'll also need a Standard Schema compatible validation library:
+
+| Library | Package |
+| ------- | ------- |
+| Zod | `zod` ([npm](https://npmjs.com/package/zod)) |
+| Valibot | `valibot` ([npm](https://npmjs.com/package/valibot)) |
+| ArkType | `arktype` ([npm](https://npmjs.com/package/arktype)) |
+
+## Basic Usage
+
+Here's a minimal example to get started with type-safe MongoDB collections:
+
+```ts
+import { MongoClient } from "mongodb";
+import { defineCollection } from "momos";
+import { z } from "zod";
+
+// Define your schema
+const userSchema = z.object({
+  name: z.string(),
+  email: z.string().email(),
+  age: z.number().min(0),
+});
+
+// Connect to MongoDB
+const client = new MongoClient("mongodb://localhost:27017");
+await client.connect();
+const db = client.db("myapp");
+
+// Create a typed collection
+const users = defineCollection(db, "users", userSchema);
+
+// Type-safe insert - TypeScript knows the shape!
+await users.insertOne({
+  name: "John Doe",
+  email: "john@example.com",
+  age: 30,
+});
+
+// Type-safe queries with autocomplete
+const adults = await users.find({ age: { $gte: 18 } }).toArray();
+
+// Type-safe updates
+await users.updateOne(
+  { email: "john@example.com" },
+  { $set: { age: 31 } }
+);
+```
+
+## How It Works
+
+momos wraps the native MongoDB `Collection` with a `TypedCollection` class that:
+
+1. **Infers types from your schema** - Document types are automatically derived from your validation schema
+2. **Validates on write** - Documents are validated before `insert`, `replace`, and similar operations
+3. **Provides typed queries** - Filters, projections, and updates are type-checked against your schema
+4. **Returns typed results** - Query results include the `_id` field with proper typing
+
+<Callout title="Important">
+momos uses [Standard Schema](https://standardschema.dev/) for validation, which means it works with any compatible validation library. You're not locked into a specific schema library.
+</Callout>
+
+## Understanding the Types
+
+When you define a collection, momos automatically handles the `_id` field:
+
+```ts
+const userSchema = z.object({
+  name: z.string(),
+  email: z.string().email(),
+});
+
+const users = defineCollection(db, "users", userSchema);
+
+// When inserting, _id is optional (MongoDB generates it)
+await users.insertOne({ name: "John", email: "john@example.com" });
+
+// When querying, _id is always present in results
+const user = await users.findOne({ name: "John" });
+// user type: { _id: ObjectId, name: string, email: string } | null
+```
+
+If your schema already defines `_id`, momos will respect your definition:
+
+```ts
+const userSchema = z.object({
+  _id: z.string(), // Custom _id type
+  name: z.string(),
+});
+
+const users = defineCollection(db, "users", userSchema);
+// _id will be string, not ObjectId
+```
+
+## Disabling Validation
+
+For performance-critical operations, you can disable validation:
+
+```ts
+const users = defineCollection(db, "users", userSchema, {
+  validate: false, // Skip schema validation
+});
+```
+
+<Callout title="Warning">
+Disabling validation removes the runtime safety checks. Only do this when you're confident the data is already valid.
+</Callout>
+
+## Accessing the Raw Collection
+
+If you need direct access to the underlying MongoDB collection:
+
+```ts
+const users = defineCollection(db, "users", userSchema);
+
+// Access the raw MongoDB collection
+const rawCollection = users.raw;
+
+// Use native MongoDB methods
+await rawCollection.bulkWrite([...]);
+```
+
+## Next Steps
+
+- Learn about [Collection Operations](/docs/momos/collection) for CRUD operations
+- Explore [Query Types](/docs/momos/queries) for filters, projections, and updates
+- Understand [Cursor Operations](/docs/momos/cursors) for working with result sets
+- See validation examples with [Zod](/docs/momos/zod), [Valibot](/docs/momos/valibot), or [ArkType](/docs/momos/arktype)
+

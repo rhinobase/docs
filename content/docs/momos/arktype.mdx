@@ -1,0 +1,327 @@
+---
+title: ArkType
+description: Using momos with ArkType validation
+---
+
+## Installation
+
+Install momos with ArkType:
+
+```package-install
+momos mongodb arktype
+```
+
+## Basic Setup
+
+```ts
+import { MongoClient } from "mongodb";
+import { defineCollection } from "momos";
+import { type } from "arktype";
+
+const client = new MongoClient("mongodb://localhost:27017");
+await client.connect();
+const db = client.db("myapp");
+```
+
+## Defining Schemas
+
+### Simple Schema
+
+```ts
+const userSchema = type({
+  name: "string > 0", // Non-empty string
+  email: "string.email",
+  age: "integer >= 0",
+});
+
+const users = defineCollection(db, "users", userSchema);
+```
+
+### Nested Objects
+
+```ts
+const addressSchema = type({
+  street: "string",
+  city: "string",
+  state: "string == 2", // Exactly 2 characters
+  zip: "/^\\d{5}(-\\d{4})?$/",
+  country: "string = 'USA'", // Default value
+});
+
+const companySchema = type({
+  name: "string",
+  industry: "string",
+  headquarters: addressSchema,
+  offices: addressSchema.array(),
+});
+
+const companies = defineCollection(db, "companies", companySchema);
+```
+
+### Arrays
+
+```ts
+const productSchema = type({
+  name: "string",
+  tags: "string[] > 0", // Non-empty array of strings
+  variants: type({
+    sku: "string",
+    color: "string",
+    size: "'S' | 'M' | 'L' | 'XL'",
+    price: "number > 0",
+  }).array(),
+});
+
+const products = defineCollection(db, "products", productSchema);
+```
+
+### Enums with Unions
+
+```ts
+const orderSchema = type({
+  orderNumber: "string",
+  status: "'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled'",
+  priority: "'low' | 'normal' | 'high' | 'urgent' = 'normal'",
+});
+
+const orders = defineCollection(db, "orders", orderSchema);
+
+// Type-safe status updates
+await orders.updateOne(
+  { orderNumber: "ORD-001" },
+  { $set: { status: "shipped" } }
+);
+```
+
+### Optional and Nullable
+
+```ts
+const profileSchema = type({
+  username: "string",
+  "bio?": "string",              // Optional
+  avatar: "string.url | null",   // Nullable
+  "website?": "string.url | null", // Optional and nullable
+});
+
+const profiles = defineCollection(db, "profiles", profileSchema);
+```
+
+### Union Types
+
+```ts
+// Simple union
+const idSchema = type("string | number");
+
+// Discriminated union
+const emailNotification = type({
+  type: "'email'",
+  to: "string.email",
+  subject: "string",
+  body: "string",
+});
+
+const smsNotification = type({
+  type: "'sms'",
+  phone: "string",
+  message: "string <= 160",
+});
+
+const pushNotification = type({
+  type: "'push'",
+  deviceToken: "string",
+  title: "string",
+  body: "string",
+});
+
+const notificationSchema = emailNotification.or(smsNotification).or(pushNotification);
+
+const notifications = defineCollection(db, "notifications", notificationSchema);
+
+// Type-safe inserts
+await notifications.insertOne({
+  type: "email",
+  to: "user@example.com",
+  subject: "Welcome!",
+  body: "Thanks for signing up.",
+});
+```
+
+### Morphs (Transformations)
+
+```ts
+const userSchema = type({
+  email: type("string.email").pipe((s) => s.toLowerCase()),
+  name: type("string").pipe((s) => s.trim()),
+  username: type("string >= 3 & string <= 20")
+    .pipe((s) => s.toLowerCase())
+    .narrow((s): s is string => /^[a-z0-9_]+$/.test(s)),
+});
+
+const users = defineCollection(db, "users", userSchema);
+
+// Data is transformed before insertion
+await users.insertOne({
+  email: "JOHN@EXAMPLE.COM", // Stored as "john@example.com"
+  name: "  John Doe  ",     // Stored as "John Doe"
+  username: "johndoe123",
+});
+```
+
+### Custom Validation with Narrow
+
+```ts
+const passwordSchema = type("string >= 8")
+  .narrow((s): s is string => /[A-Z]/.test(s), "Must contain uppercase")
+  .narrow((s): s is string => /[a-z]/.test(s), "Must contain lowercase")
+  .narrow((s): s is string => /[0-9]/.test(s), "Must contain a number");
+
+const userSchema = type({
+  username: "string",
+  password: passwordSchema,
+});
+```
+
+### Dates
+
+```ts
+const eventSchema = type({
+  name: "string",
+  startDate: "Date",
+  endDate: "Date",
+  "createdAt?": "Date",
+});
+
+const events = defineCollection(db, "events", eventSchema);
+
+await events.insertOne({
+  name: "Conference 2024",
+  startDate: new Date("2024-06-01"),
+  endDate: new Date("2024-06-03"),
+});
+```
+
+## Complete Example
+
+```ts
+import { MongoClient, ObjectId } from "mongodb";
+import { defineCollection, ValidationError } from "momos";
+import { type } from "arktype";
+
+// Connect to MongoDB
+const client = new MongoClient("mongodb://localhost:27017");
+await client.connect();
+const db = client.db("blog");
+
+// Define schemas
+const authorSchema = type({
+  name: "string > 0",
+  email: "string.email",
+  "bio?": "string",
+});
+
+const postSchema = type({
+  title: "string > 0 & string <= 200",
+  slug: "/^[a-z0-9-]+$/",
+  content: "string",
+  "excerpt?": "string <= 500",
+  author: authorSchema,
+  tags: "string[] = []",
+  status: "'draft' | 'published' | 'archived' = 'draft'",
+  views: "integer >= 0 = 0",
+  createdAt: "Date",
+  updatedAt: "Date",
+});
+
+// Create typed collection
+const posts = defineCollection(db, "posts", postSchema);
+
+// Create indexes
+await posts.createIndex({ slug: 1 }, { unique: true });
+await posts.createIndex({ "author.email": 1 });
+await posts.createIndex({ tags: 1 });
+await posts.createIndex({ status: 1, createdAt: -1 });
+
+// Insert a post
+try {
+  await posts.insertOne({
+    title: "Getting Started with momos",
+    slug: "getting-started-with-momos",
+    content: "momos is a type-safe MongoDB wrapper...",
+    author: {
+      name: "John Doe",
+      email: "john@example.com",
+    },
+    tags: ["mongodb", "typescript", "tutorial"],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+} catch (error) {
+  if (error instanceof ValidationError) {
+    console.error("Validation failed:", error.issues);
+  }
+  throw error;
+}
+
+// Query posts
+const publishedPosts = await posts
+  .find({ status: "published" })
+  .sort({ createdAt: -1 })
+  .limit(10)
+  .toArray();
+
+// Update with type safety
+await posts.updateOne(
+  { slug: "getting-started-with-momos" },
+  {
+    $set: { status: "published" },
+    $inc: { views: 1 },
+    $currentDate: { updatedAt: true },
+  }
+);
+
+// Aggregation
+type TagStats = { _id: string; count: number };
+
+const popularTags = await posts
+  .aggregate<TagStats>([
+    { $match: { status: "published" } },
+    { $unwind: "$tags" },
+    { $group: { _id: "$tags", count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: 10 },
+  ])
+  .toArray();
+
+console.log("Popular tags:", popularTags);
+```
+
+## Error Handling
+
+```ts
+import { ValidationError } from "momos";
+
+try {
+  await users.insertOne({
+    name: "",
+    email: "not-an-email",
+    age: -5,
+  });
+} catch (error) {
+  if (error instanceof ValidationError) {
+    error.issues.forEach((issue) => {
+      console.log(`${issue.path?.join(".")}: ${issue.message}`);
+    });
+  }
+}
+```
+
+## Why ArkType?
+
+ArkType offers several advantages:
+
+- **Concise syntax** - Define complex types with minimal code
+- **Fast** - Highly optimized runtime validation
+- **Type-safe** - 1:1 correspondence with TypeScript types
+- **Standard Schema** - Works seamlessly with momos
+- **No code generation** - Pure runtime solution
+

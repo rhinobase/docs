@@ -1,0 +1,385 @@
+---
+title: Valibot
+description: Using momos with Valibot validation
+---
+
+## Installation
+
+Install momos with Valibot:
+
+```package-install
+momos mongodb valibot
+```
+
+## Basic Setup
+
+```ts
+import { MongoClient } from "mongodb";
+import { defineCollection } from "momos";
+import * as v from "valibot";
+
+const client = new MongoClient("mongodb://localhost:27017");
+await client.connect();
+const db = client.db("myapp");
+```
+
+## Defining Schemas
+
+### Simple Schema
+
+```ts
+const userSchema = v.object({
+  name: v.pipe(v.string(), v.minLength(1, "Name is required")),
+  email: v.pipe(v.string(), v.email("Invalid email address")),
+  age: v.pipe(v.number(), v.integer(), v.minValue(0, "Age must be positive")),
+});
+
+const users = defineCollection(db, "users", userSchema);
+```
+
+### Schema with Defaults
+
+```ts
+const postSchema = v.object({
+  title: v.string(),
+  content: v.string(),
+  slug: v.pipe(v.string(), v.regex(/^[a-z0-9-]+$/)),
+  views: v.optional(v.number(), 0),
+  likes: v.optional(v.number(), 0),
+  published: v.optional(v.boolean(), false),
+  createdAt: v.optional(v.date(), () => new Date()),
+  updatedAt: v.optional(v.date(), () => new Date()),
+});
+
+const posts = defineCollection(db, "posts", postSchema);
+
+// Insert with minimal data - defaults are applied
+await posts.insertOne({
+  title: "Hello World",
+  content: "My first post",
+  slug: "hello-world",
+});
+```
+
+### Nested Objects
+
+```ts
+const addressSchema = v.object({
+  street: v.string(),
+  city: v.string(),
+  state: v.pipe(v.string(), v.length(2)),
+  zip: v.pipe(v.string(), v.regex(/^\d{5}(-\d{4})?$/)),
+  country: v.optional(v.string(), "USA"),
+});
+
+const companySchema = v.object({
+  name: v.string(),
+  industry: v.string(),
+  headquarters: addressSchema,
+  offices: v.optional(v.array(addressSchema), []),
+});
+
+const companies = defineCollection(db, "companies", companySchema);
+```
+
+### Arrays
+
+```ts
+const productSchema = v.object({
+  name: v.string(),
+  tags: v.pipe(
+    v.array(v.string()),
+    v.minLength(1, "At least one tag required")
+  ),
+  variants: v.array(v.object({
+    sku: v.string(),
+    color: v.string(),
+    size: v.picklist(["S", "M", "L", "XL"]),
+    price: v.pipe(v.number(), v.minValue(0)),
+  })),
+});
+
+const products = defineCollection(db, "products", productSchema);
+```
+
+### Enums with Picklist
+
+```ts
+const orderSchema = v.object({
+  orderNumber: v.string(),
+  status: v.picklist(["pending", "processing", "shipped", "delivered", "cancelled"]),
+  priority: v.optional(
+    v.picklist(["low", "normal", "high", "urgent"]),
+    "normal"
+  ),
+});
+
+const orders = defineCollection(db, "orders", orderSchema);
+
+// Type-safe status updates
+await orders.updateOne(
+  { orderNumber: "ORD-001" },
+  { $set: { status: "shipped" } }
+);
+```
+
+### Optional and Nullable
+
+```ts
+const profileSchema = v.object({
+  username: v.string(),
+  bio: v.optional(v.string()),           // Can be undefined
+  avatar: v.nullable(v.pipe(v.string(), v.url())), // Can be null
+  website: v.nullish(v.pipe(v.string(), v.url())), // Can be null or undefined
+});
+
+const profiles = defineCollection(db, "profiles", profileSchema);
+```
+
+### Union Types
+
+```ts
+// Simple union
+const idSchema = v.union([v.string(), v.number()]);
+
+// Variant for discriminated unions
+const notificationSchema = v.variant("type", [
+  v.object({
+    type: v.literal("email"),
+    to: v.pipe(v.string(), v.email()),
+    subject: v.string(),
+    body: v.string(),
+  }),
+  v.object({
+    type: v.literal("sms"),
+    phone: v.string(),
+    message: v.pipe(v.string(), v.maxLength(160)),
+  }),
+  v.object({
+    type: v.literal("push"),
+    deviceToken: v.string(),
+    title: v.string(),
+    body: v.string(),
+  }),
+]);
+
+const notifications = defineCollection(db, "notifications", notificationSchema);
+
+// Type-safe inserts
+await notifications.insertOne({
+  type: "email",
+  to: "user@example.com",
+  subject: "Welcome!",
+  body: "Thanks for signing up.",
+});
+```
+
+### Transformations
+
+```ts
+const userSchema = v.object({
+  email: v.pipe(
+    v.string(),
+    v.email(),
+    v.transform((val) => val.toLowerCase())
+  ),
+  name: v.pipe(
+    v.string(),
+    v.transform((val) => val.trim())
+  ),
+  username: v.pipe(
+    v.string(),
+    v.minLength(3),
+    v.maxLength(20),
+    v.transform((val) => val.toLowerCase()),
+    v.regex(/^[a-z0-9_]+$/)
+  ),
+});
+
+const users = defineCollection(db, "users", userSchema);
+
+// Data is transformed before insertion
+await users.insertOne({
+  email: "JOHN@EXAMPLE.COM", // Stored as "john@example.com"
+  name: "  John Doe  ",     // Stored as "John Doe"
+  username: "JohnDoe123",   // Stored as "johndoe123"
+});
+```
+
+### Custom Validation
+
+```ts
+const passwordSchema = v.pipe(
+  v.string(),
+  v.minLength(8, "Password must be at least 8 characters"),
+  v.regex(/[A-Z]/, "Password must contain uppercase"),
+  v.regex(/[a-z]/, "Password must contain lowercase"),
+  v.regex(/[0-9]/, "Password must contain a number")
+);
+
+const userSchema = v.pipe(
+  v.object({
+    username: v.string(),
+    password: passwordSchema,
+    confirmPassword: v.string(),
+  }),
+  v.forward(
+    v.check(
+      (input) => input.password === input.confirmPassword,
+      "Passwords don't match"
+    ),
+    ["confirmPassword"]
+  )
+);
+```
+
+### Custom ObjectId Validation
+
+```ts
+import { ObjectId } from "mongodb";
+
+const objectIdSchema = v.pipe(
+  v.custom<ObjectId | string>(
+    (val) => val instanceof ObjectId || (typeof val === "string" && ObjectId.isValid(val)),
+    "Invalid ObjectId"
+  ),
+  v.transform((val) => 
+    val instanceof ObjectId ? val : new ObjectId(val as string)
+  )
+);
+
+const commentSchema = v.object({
+  postId: objectIdSchema,
+  authorId: objectIdSchema,
+  content: v.string(),
+  createdAt: v.optional(v.date(), () => new Date()),
+});
+
+const comments = defineCollection(db, "comments", commentSchema);
+```
+
+## Complete Example
+
+```ts
+import { MongoClient, ObjectId } from "mongodb";
+import { defineCollection, ValidationError } from "momos";
+import * as v from "valibot";
+
+// Connect to MongoDB
+const client = new MongoClient("mongodb://localhost:27017");
+await client.connect();
+const db = client.db("blog");
+
+// Define schemas
+const authorSchema = v.object({
+  name: v.pipe(v.string(), v.minLength(1)),
+  email: v.pipe(v.string(), v.email()),
+  bio: v.optional(v.string()),
+});
+
+const postSchema = v.object({
+  title: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
+  slug: v.pipe(v.string(), v.regex(/^[a-z0-9-]+$/)),
+  content: v.string(),
+  excerpt: v.optional(v.pipe(v.string(), v.maxLength(500))),
+  author: authorSchema,
+  tags: v.optional(v.array(v.string()), []),
+  status: v.optional(
+    v.picklist(["draft", "published", "archived"]),
+    "draft"
+  ),
+  views: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0)), 0),
+  createdAt: v.optional(v.date(), () => new Date()),
+  updatedAt: v.optional(v.date(), () => new Date()),
+});
+
+// Create typed collection
+const posts = defineCollection(db, "posts", postSchema);
+
+// Create indexes
+await posts.createIndex({ slug: 1 }, { unique: true });
+await posts.createIndex({ "author.email": 1 });
+await posts.createIndex({ tags: 1 });
+await posts.createIndex({ status: 1, createdAt: -1 });
+
+// Insert a post
+try {
+  await posts.insertOne({
+    title: "Getting Started with momos",
+    slug: "getting-started-with-momos",
+    content: "momos is a type-safe MongoDB wrapper...",
+    author: {
+      name: "John Doe",
+      email: "john@example.com",
+    },
+    tags: ["mongodb", "typescript", "tutorial"],
+  });
+} catch (error) {
+  if (error instanceof ValidationError) {
+    console.error("Validation failed:", error.issues);
+  }
+  throw error;
+}
+
+// Query posts
+const publishedPosts = await posts
+  .find({ status: "published" })
+  .sort({ createdAt: -1 })
+  .limit(10)
+  .toArray();
+
+// Update with type safety
+await posts.updateOne(
+  { slug: "getting-started-with-momos" },
+  {
+    $set: { status: "published" },
+    $inc: { views: 1 },
+    $currentDate: { updatedAt: true },
+  }
+);
+
+// Aggregation
+type TagStats = { _id: string; count: number };
+
+const popularTags = await posts
+  .aggregate<TagStats>([
+    { $match: { status: "published" } },
+    { $unwind: "$tags" },
+    { $group: { _id: "$tags", count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: 10 },
+  ])
+  .toArray();
+
+console.log("Popular tags:", popularTags);
+```
+
+## Error Handling
+
+```ts
+import { ValidationError } from "momos";
+
+try {
+  await users.insertOne({
+    name: "",
+    email: "not-an-email",
+    age: -5,
+  });
+} catch (error) {
+  if (error instanceof ValidationError) {
+    error.issues.forEach((issue) => {
+      console.log(`${issue.path?.join(".")}: ${issue.message}`);
+    });
+  }
+}
+```
+
+## Why Valibot?
+
+Valibot offers several advantages:
+
+- **Tiny bundle size** - Modular design means you only bundle what you use
+- **Type-safe** - Full TypeScript inference
+- **Fast** - Optimized for performance
+- **Standard Schema** - Works seamlessly with momos
+
