@@ -96,6 +96,44 @@ const schema = v.pipe(
 );
 ```
 
+## Adding Examples
+
+Valibot v1.2.0 introduces a type-safe `.examples()` action for providing schema examples. This is the recommended way to add examples to your schemas.
+
+<Callout type="info">
+  To use the `.examples()` action, ensure you have the following minimum versions installed:
+  - `valibot` - ^1.2.0
+  - `@valibot/to-json-schema` - ^1.5.0
+</Callout>
+
+```ts
+import * as v from "valibot";
+
+const schema = v.pipe(
+  v.string(),
+  v.examples(["hello world", "goodbye world"]),
+);
+```
+
+You can also combine it with other actions like `description` and `metadata`:
+
+```ts
+const userSchema = v.pipe(
+  v.object({
+    name: v.pipe(
+      v.string(),
+      v.examples(["John Doe", "Jane Doe"]),
+    ),
+    email: v.pipe(
+      v.string(),
+      v.email(),
+      v.examples(["john@example.com"]),
+    ),
+  }),
+  v.description("User schema"),
+);
+```
+
 ## Adding typesense for response body
 
 Simply just create your response schema and pass it in the `describeResponse` function. This will automatically provide typesense for the response body.
