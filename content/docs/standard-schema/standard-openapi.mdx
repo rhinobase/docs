@@ -1,0 +1,67 @@
+---
+title: Standard OpenAPI
+description: Generate OpenAPI 3.1 schemas from Standard Schema validators
+---
+
+## Introduction
+
+[`@standard-community/standard-openapi`](https://npmjs.com/package/@standard-community/standard-openapi)
+converts a Standard Schema validator into an OpenAPI 3.1 schema. It returns the
+schema and any reusable components separately, so callers can add both to an
+OpenAPI document.
+
+## Installation
+
+```package-install
+@standard-community/standard-openapi
+```
+
+Some validators need an additional conversion package:
+
+| Validator | Additional package |
+| --- | --- |
+| Zod v4 | None |
+| Zod v3 | `zod-openapi@4` |
+| Valibot | `@valibot/to-json-schema` |
+
+## Convert a Schema
+
+```ts
+import * as v from "valibot";
+import { toOpenAPISchema } from "@standard-community/standard-openapi";
+
+const user = v.object({
+  id: v.string(),
+  email: v.pipe(v.string(), v.email()),
+});
+
+const { schema, components } = await toOpenAPISchema(user);
+```
+
+`schema` is ready for a request body, response, parameter, or any other OpenAPI
+schema position. Add `components` to your document when it is defined.
+
+## Reusable Zod Components
+
+Zod v4 uses its built-in JSON Schema conversion. Add a `ref` with metadata to
+emit the schema as a reusable component:
+
+```ts
+import z from "zod/v4";
+import { toOpenAPISchema } from "@standard-community/standard-openapi";
+
+const user = z.object({ id: z.string() }).meta({ ref: "User" });
+const { schema, components } = await toOpenAPISchema(user);
+
+// schema is { $ref: "#/components/schemas/User" }
+// components.schemas.User contains the object schema
+```
+
+For Zod v3, install `zod-openapi@4` and import `zod-openapi/extend` before
+using `.openapi({ ref: "User" })`.
+
+## Use with Hono
+
+[hono-openapi](/docs/openapi) uses this package internally. Use
+`toOpenAPISchema` directly when you need to construct or extend an OpenAPI
+document outside Hono.
