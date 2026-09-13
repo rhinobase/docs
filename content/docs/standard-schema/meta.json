@@ -1,0 +1,11 @@
+{
+  "root": true,
+  "title": "Standard Schema",
+  "icon": "Blocks",
+  "pages": [
+    "---Introduction---",
+    "index",
+    "---Packages---",
+    "standard-openapi"
+  ]
+}
