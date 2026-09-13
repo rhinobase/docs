@@ -1,0 +1,56 @@
+---
+title: Standard JSON
+description: Generate JSON Schema from Standard Schema validators
+---
+
+## Introduction
+
+[`@standard-community/standard-json`](https://npmjs.com/package/@standard-community/standard-json)
+converts a [Standard Schema](https://standardschema.dev/) validator into JSON
+Schema. Use the result with tooling that accepts JSON Schema, or pass it to
+[`@standard-community/standard-openapi`](/docs/standard-schema/standard-openapi)
+when building an OpenAPI document.
+
+## Installation
+
+```package-install
+@standard-community/standard-json
+```
+
+Some validators need an additional conversion package:
+
+| Validator | Additional package |
+| --- | --- |
+| Zod v4 | None |
+| Zod v3 | `zod-to-json-schema` |
+| Valibot | `@valibot/to-json-schema` |
+
+## Convert a Schema
+
+```ts
+import * as v from "valibot";
+import { toJsonSchema } from "@standard-community/standard-json";
+
+const user = v.object({
+  id: v.string(),
+  email: v.pipe(v.string(), v.email()),
+});
+
+const schema = await toJsonSchema(user);
+```
+
+The asynchronous form resolves the converter for the validator you pass. It is
+the usual choice for application startup, schema generation, and build tools.
+
+## Synchronous Conversion
+
+`toJsonSchema.sync()` is available when conversion must be synchronous. Register
+the validator's converter with `loadVendor()` before calling it; otherwise the
+package cannot resolve an unloaded vendor synchronously.
+
+## Use with OpenAPI
+
+Use this package directly when JSON Schema is the final output. For an OpenAPI
+document, use [Standard OpenAPI](/docs/standard-schema/standard-openapi), which
+builds on the same Standard Schema conversion model and returns OpenAPI
+components where needed.
