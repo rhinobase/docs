@@ -81,9 +81,40 @@ And that's it! You have successfully integrated Hono OpenAPI. Now you will have 
 
 You can also pass json schema directly to the `responses.200.content["application/json"].schema` if you don't want to use `resolver` from `hono-openapi`. This is useful if you have a static schema that you want to use for the response body.
 
+## Request Bodies
+
+`validator("json", schema)` documents a request body as `application/json`.
+`validator("form", schema)` uses `multipart/form-data`. Pass a media type as
+the fourth argument when the endpoint accepts a different representation.
+When a route has JSON and form validators, the generated OpenAPI request body
+keeps a separate schema for each media type.
+
+```ts
+app.patch(
+  "/users/:id",
+  zValidator(
+    "json",
+    z.object({ name: z.string() }),
+    undefined,
+    { media: "application/merge-patch+json" },
+  ),
+  (c) => c.json(c.req.valid("json")),
+);
+```
+
+## Validation Errors
+
+Routes that use `validator()` automatically include a `400` response matching
+the validation middleware's error shape. To omit it from a generated document,
+set `defaultValidationErrorResponse: false` in the options passed to
+`openAPIRouteHandler` or `generateSpecs`. You can pass a response object there
+to use a project-specific error response instead.
+
 ## Passing Reference
 
-For zod v4, you can use [Registry](https://zod.dev/json-schema?id=metadata). Here is a demo -
+For Zod v4, add a `ref` through [metadata](https://zod.dev/json-schema?id=metadata).
+The generated schema is added to `components.schemas` and is used through an
+OpenAPI `$ref`.
 
 ```ts
 const schema = z
@@ -96,7 +127,7 @@ const schema = z
   });
 ```
 
-For zod v3, you can use the `zod-openapi` library. Here is a demo -
+For Zod v3, use the `zod-openapi` library. Here is a demo -
 
 ```ts
 import "zod-openapi/extend";
@@ -112,7 +143,8 @@ const schema = z
 ```
 
 <Callout title="Note">
-You need to install `zod-openapi@4` for this to work properly.
+Zod v4 uses its built-in JSON Schema conversion and does not require
+`zod-openapi`. Zod v3 requires `zod-openapi@4` for reference support.
 </Callout>
 
 ## Adding typesense for response body
