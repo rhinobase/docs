@@ -104,6 +104,12 @@ const redis = new Redis({
 const store = new RedisStore({ client: redis });
 ```
 
+`Redis.fromEnv()` reads `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` from the environment, so you can also write:
+
+```ts
+const redis = Redis.fromEnv();
+```
+
 ### Cloudflare Workers
 
 For Cloudflare Workers, use the Cloudflare-specific import:
@@ -133,26 +139,6 @@ export default {
     return app.fetch(request, env);
   },
 };
-```
-
-## Using with Vercel KV
-
-[Vercel KV](https://vercel.com/docs/storage/vercel-kv) is a Redis-compatible key-value store built on Upstash.
-
-```ts
-import { kv } from "@vercel/kv";
-import { RedisStore } from "hono-rate-limiter";
-
-const store = new RedisStore({ client: kv });
-
-app.use(
-  rateLimiter({
-    windowMs: 60_000,
-    limit: 100,
-    keyGenerator: (c) => c.req.header("x-forwarded-for") ?? "",
-    store,
-  })
-);
 ```
 
 ## How It Works
